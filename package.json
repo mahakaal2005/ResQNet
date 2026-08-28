@@ -1,0 +1,16 @@
+{
+  "name": "resqnet",
+  "private": true,
+  "workspaces": [
+    "apps/simulator",
+    "apps/realtime"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces --if-present",
+    "dev:realtime": "npm run dev --workspace apps/realtime",
+    "dev:simulator": "npm run dev --workspace apps/simulator",
+    "fixtures": "npm run fixtures --workspace apps/simulator",
+    "contract-test": "ts-node --project apps/realtime/tsconfig.json scripts/validate_fixture.ts"
+  }
+}

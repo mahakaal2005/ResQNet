@@ -1,0 +1,20 @@
+[
+  {
+    "sector_id": "SECTOR-A",
+    "latitude": 28.6142,
+    "longitude": 77.2093,
+    "note": "primary survivor, seen by DRONE-01 and DRONE-03"
+  },
+  {
+    "sector_id": "SECTOR-B",
+    "latitude": 28.6178,
+    "longitude": 77.2044,
+    "note": "isolated survivor, SECTOR-B only"
+  },
+  {
+    "sector_id": "SECTOR-C",
+    "latitude": 28.6142,
+    "longitude": 77.2093,
+    "note": "same person as SECTOR-A row, re-detected from a different flight path to trigger dedup"
+  }
+]

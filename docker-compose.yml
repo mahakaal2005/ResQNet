@@ -1,0 +1,4 @@
+# Owner: Charan (Section 3, secondary ownership: local Docker Compose bootstrap)
+# Fill in as apps/api, apps/realtime, database, etc. come online.
+version: "3.9"
+services: {}
