@@ -1,3 +1,4 @@
+import { describe, it, expect } from "@jest/globals";
 import { DroneStateMachine } from "../src/drone-state/stateMachine";
 
 describe("DroneStateMachine", () => {
@@ -14,6 +15,13 @@ describe("DroneStateMachine", () => {
     sm.onTelemetry("DRONE-01", "SECTOR-A", 1000);
     const evt = sm.onTelemetry("DRONE-01", "SECTOR-A", 2000);
     expect(evt).toBeNull();
+  });
+
+  it("updates last_seen on every accepted telemetry tick", () => {
+    const sm = new DroneStateMachine(5000);
+    sm.onTelemetry("DRONE-01", "SECTOR-A", 1000);
+    sm.onTelemetry("DRONE-01", "SECTOR-A", 2000);
+    expect(sm.get("DRONE-01")?.lastSeenMs).toBe(2000);
   });
 
   it("marks a drone 'lost' after the timeout with no telemetry", () => {

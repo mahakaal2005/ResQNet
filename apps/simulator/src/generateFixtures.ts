@@ -4,11 +4,6 @@ import { DroneAgent } from "./droneAgent";
 import { SECTORS, GROUND_TRUTH } from "./sectors";
 import { DroneTelemetry } from "./types";
 
-const OUT_DIR = path.join(__dirname, "..");
-const TELEMETRY_OUT = path.join(OUT_DIR, "sample_telemetry.json");
-const FRAMES_DIR = path.join(OUT_DIR, "sample_frames");
-const GROUND_TRUTH_OUT = path.join(FRAMES_DIR, "..", "ground_truth.json");
-
 const TICKS_PER_DRONE = 40; // ~40s of flight per drone at 1Hz
 const BASE_TIME = Date.parse("2026-08-27T10:30:00.000Z");
 
@@ -21,7 +16,11 @@ const agents = [
   new DroneAgent("DRONE-03", SECTORS[2]),
 ];
 
-function main() {
+/** Generate the deterministic telemetry and matching image fixtures. */
+export function generateFixtures(outDir = path.join(__dirname, "..")) {
+  const telemetryOut = path.join(outDir, "sample_telemetry.json");
+  const framesDir = path.join(outDir, "sample_frames");
+  const groundTruthOut = path.join(outDir, "ground_truth.json");
   const telemetry: DroneTelemetry[] = [];
   let frameCounter = 1;
 
@@ -33,13 +32,13 @@ function main() {
     }
   }
 
-  fs.writeFileSync(TELEMETRY_OUT, JSON.stringify(telemetry, null, 2));
-  console.log(`Wrote ${telemetry.length} telemetry packets -> ${TELEMETRY_OUT}`);
+  fs.writeFileSync(telemetryOut, JSON.stringify(telemetry, null, 2));
+  console.log(`Wrote ${telemetry.length} telemetry packets -> ${telemetryOut}`);
 
-  fs.writeFileSync(GROUND_TRUTH_OUT, JSON.stringify(GROUND_TRUTH, null, 2));
-  console.log(`Wrote synthetic ground truth -> ${GROUND_TRUTH_OUT}`);
+  fs.writeFileSync(groundTruthOut, JSON.stringify(GROUND_TRUTH, null, 2));
+  console.log(`Wrote synthetic ground truth -> ${groundTruthOut}`);
 
-  writeFramePlaceholders(frameCounter - 1);
+  writeFramePlaceholders(framesDir, frameCounter - 1);
 }
 
 /**
@@ -48,8 +47,8 @@ function main() {
  * detection service and Atul's geolocation service can point real file
  * I/O at real paths without waiting on real footage.
  */
-function writeFramePlaceholders(frameCount: number) {
-  if (!fs.existsSync(FRAMES_DIR)) fs.mkdirSync(FRAMES_DIR, { recursive: true });
+function writeFramePlaceholders(framesDir: string, frameCount: number) {
+  if (!fs.existsSync(framesDir)) fs.mkdirSync(framesDir, { recursive: true });
 
   // Smallest valid JPEG (1x1 black pixel), base64-encoded.
   const TINY_JPEG_B64 =
@@ -57,13 +56,15 @@ function writeFramePlaceholders(frameCount: number) {
   const buf = Buffer.from(TINY_JPEG_B64, "base64");
 
   const manifest: { frame_ref: string; note: string }[] = [];
-  for (let i = 1; i <= Math.min(frameCount, 15); i++) {
+  for (let i = 1; i <= frameCount; i++) {
     const name = `frame_${String(i).padStart(5, "0")}.jpg`;
-    fs.writeFileSync(path.join(FRAMES_DIR, name), buf);
+    fs.writeFileSync(path.join(framesDir, name), buf);
     manifest.push({ frame_ref: name, note: "placeholder — replace with real/composited aerial frame" });
   }
-  fs.writeFileSync(path.join(FRAMES_DIR, "manifest.json"), JSON.stringify(manifest, null, 2));
-  console.log(`Wrote ${manifest.length} placeholder frames -> ${FRAMES_DIR}`);
+  fs.writeFileSync(path.join(framesDir, "manifest.json"), JSON.stringify(manifest, null, 2));
+  console.log(`Wrote ${manifest.length} placeholder frames -> ${framesDir}`);
 }
 
-main();
+if (require.main === module) {
+  generateFixtures();
+}
