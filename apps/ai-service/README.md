@@ -27,8 +27,13 @@ Camera intrinsics (FOV, resolution) are fixed placeholder constants in
 calibration against whatever the simulator/real camera actually uses.
 
 ### Tracking (`src/tracking/`)
-- `tracker.py` — greedy centroid-distance identity tracker across frames.
-  Not a full SORT/Kalman implementation; sufficient for Phase 1's scope.
+- `kalman_tracker.py` — **current recommended implementation.** SORT-style:
+  constant-velocity Kalman filter per track + Hungarian assignment
+  (`scipy.optimize.linear_sum_assignment`) on IoU. Handles crossing paths
+  correctly (verified by test); requires `numpy`/`scipy`.
+- `tracker.py` — simple greedy centroid-distance matcher, zero dependencies
+  beyond stdlib. Kept as a lightweight fallback; will misidentify tracks
+  when paths cross since it only looks at last-known position, not velocity.
 
 ### Validation (`src/validation/`)
 - `ground_truth.py` — scores geolocation output against known synthetic
