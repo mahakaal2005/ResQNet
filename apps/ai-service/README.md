@@ -47,6 +47,26 @@ python geolocate.py --telemetry tests/fixtures/sample_telemetry.json \
 No backend, no dashboard, no live camera required — runs fully from the
 committed fixtures.
 
+## Real integration with Rudra's incident API
+
+`integration_demo.py` proves this module and `apps/api`'s intake pipeline
+actually work together, not just against each other's mocks — it POSTs a
+real detection + a real computed geolocation into a live incident API and
+prints the resulting incident (dedup, evidence merge, priority score all
+real, not simulated).
+
+```bash
+# with apps/api running against a real Postgres+PostGIS instance
+# (see docs/api/intelligence-demo.md), from a checkout of feature/intelligence:
+python integration_demo.py --api-url http://localhost:3060 \
+    --telemetry tests/fixtures/sample_telemetry.json \
+    --detections tests/fixtures/mock_detections.json
+```
+
+Verified 2026-08-30: both fixture detections (same drone, two frames) merged
+into one incident via Rudra's dedup logic, with evidence and priority score
+updating correctly across both POSTs.
+
 ## Tests
 
 ```bash
