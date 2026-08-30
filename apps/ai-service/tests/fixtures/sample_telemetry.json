@@ -1,0 +1,17 @@
+{
+  "drone_id": "DRONE-01",
+  "sector_id": "SECTOR-A",
+  "timestamp": "2026-08-27T10:30:05Z",
+  "lat": 28.61405,
+  "lon": 77.20905,
+  "altitude_m": 80.0,
+  "heading_deg": 30.0,
+  "gimbal_pitch_deg": -68.0,
+  "frame_ref": "frame_00234.jpg",
+
+  "_ground_truth_note": "Synthetic ground truth for validation. Target coordinates below are the known-correct answer this telemetry + the matching detection centroids in mock_detections.json should project to, within reported error_m. Coordinates reused from Rudra's incident dedup fixtures (packages/contracts/mocks/mock_geolocation_result.json) for cross-module consistency.",
+  "ground_truth": [
+    { "detection_id": "DET-01", "latitude": 28.6142, "longitude": 77.2093 },
+    { "detection_id": "DET-02", "latitude": 28.61423, "longitude": 77.20934 }
+  ]
+}

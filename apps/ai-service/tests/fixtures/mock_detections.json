@@ -1,0 +1,20 @@
+[
+  {
+    "detection_id": "DET-01",
+    "drone_id": "DRONE-01",
+    "sector_id": "SECTOR-A",
+    "timestamp": "2026-08-27T10:30:05Z",
+    "bbox": { "x": 495, "y": 233, "w": 40, "h": 40 },
+    "confidence": 0.87,
+    "centroid": { "x": 515.4, "y": 253.1 }
+  },
+  {
+    "detection_id": "DET-02",
+    "drone_id": "DRONE-01",
+    "sector_id": "SECTOR-A",
+    "timestamp": "2026-08-27T10:31:40Z",
+    "bbox": { "x": 488, "y": 209, "w": 40, "h": 40 },
+    "confidence": 0.91,
+    "centroid": { "x": 508.5, "y": 229.1 }
+  }
+]

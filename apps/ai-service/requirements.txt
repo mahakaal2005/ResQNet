@@ -1,0 +1,9 @@
+# Core geolocation/tracking/validation modules have zero external deps
+# beyond the stdlib (math, dataclasses). Kept minimal on purpose.
+
+pytest>=8.0.0
+
+# HTTP surface for POST /ai/geolocate (role doc Section 7 "APIs exposed").
+# Not required for the CLI demo (geolocate.py) or the test suite.
+fastapi>=0.110.0
+uvicorn>=0.27.0
