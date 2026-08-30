@@ -28,6 +28,9 @@ jobs:
           cache: "npm"
           cache-dependency-path: apps/api/package-lock.json
 
+      - name: Pin npm to match the committed lockfile's generator
+        run: npm install -g npm@11.8.0 # avoids npm-major-version drift causing false "lockfile out of sync" failures
+
       - name: Install dependencies
         run: npm ci
 
