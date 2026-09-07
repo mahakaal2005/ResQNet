@@ -97,6 +97,72 @@ describe("realtime gateway", () => {
     await expect(reconnected).resolves.toMatchObject({ status: "reconnected" });
   });
 
+  test("a reconnect emits network.reconnected and sync.completed", async () => {
+    await gateway.close();
+    gateway = createGateway({ mockMission: false, lostAfterMs: 40 });
+    await new Promise<void>((resolve) => gateway.httpServer.listen(0, "127.0.0.1", resolve));
+    const address = gateway.httpServer.address(); if (!address || typeof address === "string") throw new Error("Gateway did not bind");
+    url = `http://127.0.0.1:${address.port}`;
+    const drone = client(); const observer = client();
+    await Promise.all([connected(drone), connected(observer)]); await register(drone, "DRONE-01");
+
+    drone.emit("telemetry", telemetry());
+    await once(observer, "drone.telemetry");
+
+    const offline = once(observer, "network.offline");
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await offline;
+
+    const reconnected = once<{ drone_id: string; at: string }>(observer, "network.reconnected");
+    const syncCompleted = once<{ drone_id: string; records_flushed: number; from: string; to: string }>(observer, "sync.completed");
+    drone.emit("telemetry", telemetry("DRONE-01", "2026-08-27T10:30:01.000Z"));
+
+    await expect(reconnected).resolves.toMatchObject({ drone_id: "DRONE-01" });
+    await expect(syncCompleted).resolves.toMatchObject({
+      drone_id: "DRONE-01",
+      records_flushed: 0,
+      from: expect.any(String),
+      to: expect.any(String),
+    });
+  });
+
+  test("replays an offline batch and reports the flushed record count", async () => {
+    await gateway.close();
+    gateway = createGateway({ mockMission: false, lostAfterMs: 40 });
+    await new Promise<void>((resolve) => gateway.httpServer.listen(0, "127.0.0.1", resolve));
+    const address = gateway.httpServer.address(); if (!address || typeof address === "string") throw new Error("Gateway did not bind");
+    url = `http://127.0.0.1:${address.port}`;
+    const drone = client(); const observer = client();
+    await Promise.all([connected(drone), connected(observer)]); await register(drone, "DRONE-01");
+
+    drone.emit("telemetry", telemetry());
+    await once(observer, "drone.telemetry");
+    await once(observer, "network.offline");
+
+    const replayTelemetry = Promise.all([once(observer, "drone.telemetry"), once(observer, "drone.telemetry")]);
+    const reconnected = once<{ drone_id: string }>(observer, "network.reconnected");
+    const synced = once<{ drone_id: string; records_flushed: number }>(observer, "sync.completed");
+    drone.emit("telemetry.replay", {
+      drone_id: "DRONE-01",
+      records: [
+        telemetry("DRONE-01", "2026-08-27T10:30:01.000Z"),
+        telemetry("DRONE-01", "2026-08-27T10:30:02.000Z"),
+      ],
+    });
+
+    await replayTelemetry;
+    await expect(reconnected).resolves.toMatchObject({ drone_id: "DRONE-01" });
+    await expect(synced).resolves.toMatchObject({ drone_id: "DRONE-01", records_flushed: 2 });
+  });
+
+  test("forwards live mission events to the simulator clients", async () => {
+    const publisher = client(); const simulator = client();
+    await Promise.all([connected(publisher), connected(simulator)]);
+    const started = once<{ mission_id: string; status: string }>(simulator, "mission.started");
+    publisher.emit("mission.started", { mission_id: "MISSION-42", status: "active" });
+    await expect(started).resolves.toEqual({ mission_id: "MISSION-42", status: "active" });
+  });
+
   test("tracks multiple drones independently", async () => {
     await gateway.close();
     gateway = createGateway({ mockMission: false, lostAfterMs: 60 });
