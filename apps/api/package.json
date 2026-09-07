@@ -20,12 +20,15 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "seed": "node ../../database/seeds/seed.mjs",
+    "demo:core": "vitest run --config ./vitest.config.e2e.ts test/backend-core.e2e-spec.ts",
     "demo:intelligence": "vitest run --config ./vitest.config.e2e.ts test/intelligence.e2e-spec.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
     "@nestjs/core": "^12.0.1",
     "@nestjs/event-emitter": "^12.0.0",
+    "@nestjs/jwt": "^12.0.1",
     "@nestjs/platform-express": "^12.0.1",
     "@nestjs/typeorm": "^12.0.1",
     "class-transformer": "^0.5.1",
