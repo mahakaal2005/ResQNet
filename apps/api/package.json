@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "demo:intelligence": "vitest run --config ./vitest.config.e2e.ts test/intelligence.e2e-spec.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",
+    "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.0.1",
     "@types/express": "^5.0.0",
