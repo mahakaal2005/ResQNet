@@ -1,0 +1,16 @@
+[
+  {
+    "detection_id": "DET-01",
+    "latitude": 28.6142,
+    "longitude": 77.2093,
+    "error_m": 4.2,
+    "method": "flat_ground_photogrammetric"
+  },
+  {
+    "detection_id": "DET-02",
+    "latitude": 28.61423,
+    "longitude": 77.20934,
+    "error_m": 3.8,
+    "method": "flat_ground_photogrammetric"
+  }
+]

@@ -1,0 +1,59 @@
+[
+  {
+    "id": "00000000-0000-4000-8000-000000000201",
+    "mission_id": "MISSION-DEMO-1",
+    "sector_id": "SECTOR-A",
+    "polygon": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [77.2, 28.61],
+          [77.21, 28.61],
+          [77.21, 28.615],
+          [77.2, 28.615],
+          [77.2, 28.61]
+        ]
+      ]
+    },
+    "assigned_drone_id": "DRONE-01",
+    "created_at": "2026-08-27T10:29:00.000Z"
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000202",
+    "mission_id": "MISSION-DEMO-1",
+    "sector_id": "SECTOR-B",
+    "polygon": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [77.2, 28.615],
+          [77.21, 28.615],
+          [77.21, 28.62],
+          [77.2, 28.62],
+          [77.2, 28.615]
+        ]
+      ]
+    },
+    "assigned_drone_id": "DRONE-02",
+    "created_at": "2026-08-27T10:29:00.000Z"
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000203",
+    "mission_id": "MISSION-DEMO-1",
+    "sector_id": "SECTOR-C",
+    "polygon": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [77.21, 28.61],
+          [77.22, 28.61],
+          [77.22, 28.62],
+          [77.21, 28.62],
+          [77.21, 28.61]
+        ]
+      ]
+    },
+    "assigned_drone_id": "DRONE-03",
+    "created_at": "2026-08-27T10:29:00.000Z"
+  }
+]
