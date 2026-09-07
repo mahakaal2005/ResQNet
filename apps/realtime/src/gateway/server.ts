@@ -8,6 +8,12 @@ import { scheduleMockMissionStart, MissionEvent } from "../drone-state/missionSt
 type CommandType = "pause" | "resume" | "return_home";
 interface DroneCommand { command_id: string; drone_id: string; type: CommandType; issued_by: string; issued_at: string; }
 interface DroneRegistration { drone_id: string; device_token: string; }
+interface TelemetryPacket {
+  drone_id: string;
+  sector_id: string;
+  timestamp: string;
+}
+interface TelemetryReplay { drone_id: string; records: unknown[]; }
 
 export interface GatewayOptions {
   port?: number;
@@ -54,19 +60,49 @@ export function createGateway(opts: GatewayOptions = {}) {
     });
 
     socket.on("telemetry", (packet: unknown) => {
-      const result = validateTelemetry(packet);
-      if (!result.valid) return void socket.emit("telemetry.rejected", { reason: "invalid", errors: result.errors });
-      const p = packet as { drone_id: string; sector_id: string; timestamp: string };
-      if (!socketDrones.get(socket.id)?.has(p.drone_id)) return void socket.emit("telemetry.rejected", { reason: "unregistered_drone" });
-      const timestampMs = Date.parse(p.timestamp);
-      const previous = lastTelemetryMs.get(p.drone_id);
-      if (previous !== undefined && timestampMs <= previous) {
-        return void socket.emit("telemetry.rejected", { reason: timestampMs === previous ? "duplicate" : "stale" });
+      ingestTelemetry(packet, socket.id);
+    });
+
+    socket.on("telemetry.replay", (replay: unknown) => {
+      if (!isTelemetryReplay(replay)) return void socket.emit("telemetry.rejected", { reason: "invalid_replay" });
+      if (!socketDrones.get(socket.id)?.has(replay.drone_id)) {
+        return void socket.emit("telemetry.rejected", { reason: "unregistered_drone" });
       }
-      lastTelemetryMs.set(p.drone_id, timestampMs);
-      const statusEvent = stateMachine.onTelemetry(p.drone_id, p.sector_id);
-      realtime.emit("drone.telemetry", packet);
-      if (statusEvent) realtime.emit("drone.status", statusEvent);
+
+      const before = stateMachine.get(replay.drone_id);
+      const firstTimestamp = replay.records.length > 0 ? getTimestamp(replay.records[0]) : undefined;
+      let accepted = 0;
+      let lastTimestamp: string | undefined;
+      for (const packet of replay.records) {
+        if (!isTelemetryForDrone(packet, replay.drone_id)) {
+          socket.emit("telemetry.rejected", { reason: "invalid_replay_record" });
+          continue;
+        }
+        if (ingestTelemetry(packet, socket.id, true)) {
+          accepted += 1;
+          lastTimestamp = packet.timestamp;
+        }
+      }
+
+      if (accepted > 0 && before?.status === "lost") {
+        const now = new Date().toISOString();
+        realtime.emit("network.reconnected", { drone_id: replay.drone_id, at: now });
+        realtime.emit("sync.completed", {
+          drone_id: replay.drone_id,
+          records_flushed: accepted,
+          from: firstTimestamp ?? new Date(before.lastSeenMs).toISOString(),
+          to: lastTimestamp ?? now,
+        });
+      }
+    });
+
+    // Charan's mission service can publish these events directly once live.
+    // The local mock uses the same transport path, so the simulator contract stays unchanged.
+    socket.on("mission.started", (event: unknown) => {
+      if (isMissionEvent(event, "mission.started")) realtime.emit("mission.started", event);
+    });
+    socket.on("mission.paused", (event: unknown) => {
+      if (isMissionEvent(event, "mission.paused")) realtime.emit("mission.paused", event);
     });
 
     socket.on("drone.command", (command: unknown) => {
@@ -106,6 +142,41 @@ export function createGateway(opts: GatewayOptions = {}) {
     if (httpServer.listening) await new Promise<void>((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
   }
   return { app, httpServer, io, stateMachine, close };
+
+  function ingestTelemetry(packet: unknown, socketId: string, suppressReconnectEvents = false): boolean {
+    const result = validateTelemetry(packet);
+    if (!result.valid) {
+      realtime.to(socketId).emit("telemetry.rejected", { reason: "invalid", errors: result.errors });
+      return false;
+    }
+    const p = packet as TelemetryPacket;
+    if (!socketDrones.get(socketId)?.has(p.drone_id)) {
+      realtime.to(socketId).emit("telemetry.rejected", { reason: "unregistered_drone" });
+      return false;
+    }
+    const timestampMs = Date.parse(p.timestamp);
+    const previous = lastTelemetryMs.get(p.drone_id);
+    if (previous !== undefined && timestampMs <= previous) {
+      realtime.to(socketId).emit("telemetry.rejected", { reason: timestampMs === previous ? "duplicate" : "stale" });
+      return false;
+    }
+    lastTelemetryMs.set(p.drone_id, timestampMs);
+    const nowMs = Date.now();
+    const previousState = stateMachine.get(p.drone_id);
+    const statusEvent = stateMachine.onTelemetry(p.drone_id, p.sector_id, nowMs);
+    realtime.emit("drone.telemetry", packet);
+    if (statusEvent) realtime.emit("drone.status", statusEvent);
+    if (!suppressReconnectEvents && statusEvent?.status === "reconnected" && previousState?.status === "lost") {
+      realtime.emit("network.reconnected", { drone_id: p.drone_id, at: new Date(nowMs).toISOString() });
+      realtime.emit("sync.completed", {
+        drone_id: p.drone_id,
+        records_flushed: 0,
+        from: new Date(previousState.lastSeenMs).toISOString(),
+        to: new Date(nowMs).toISOString(),
+      });
+    }
+    return true;
+  }
 }
 
 function isDroneRegistration(value: unknown): value is DroneRegistration {
@@ -124,5 +195,17 @@ function isCommandAck(value: unknown): value is { command_id: string; drone_id: 
     && (value.status === "accepted" || value.status === "completed" || value.status === "rejected")
     && typeof value.at === "string" && !Number.isNaN(Date.parse(value.at))
     && (value.reason === undefined || typeof value.reason === "string");
+}
+function isTelemetryReplay(value: unknown): value is TelemetryReplay {
+  return isObject(value) && typeof value.drone_id === "string" && Array.isArray(value.records);
+}
+function isTelemetryForDrone(value: unknown, droneId: string): value is TelemetryPacket {
+  return isObject(value) && value.drone_id === droneId && validateTelemetry(value).valid;
+}
+function getTimestamp(value: unknown): string | undefined {
+  return isObject(value) && typeof value.timestamp === "string" ? value.timestamp : undefined;
+}
+function isMissionEvent(value: unknown, event: "mission.started" | "mission.paused"): value is { mission_id: string; status: string } {
+  return isObject(value) && typeof value.mission_id === "string" && typeof value.status === "string" && event.length > 0;
 }
 function isObject(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null; }
