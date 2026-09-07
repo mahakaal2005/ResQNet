@@ -12,5 +12,9 @@
     "dev:simulator": "npm run dev --workspace apps/simulator",
     "fixtures": "npm run fixtures --workspace apps/simulator",
     "contract-test": "ts-node --project apps/realtime/tsconfig.json scripts/validate_fixture.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "path": "^0.12.7"
   }
 }
