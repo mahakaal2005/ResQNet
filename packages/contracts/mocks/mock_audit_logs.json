@@ -1,0 +1,84 @@
+[
+  {
+    "id": "00000000-0000-4000-8000-000000000306",
+    "mission_id": "MISSION-DEMO-1",
+    "actor_user_id": null,
+    "action": "incident.created",
+    "entity_type": "incident",
+    "entity_id": "INC-A21ADCDC",
+    "payload": {
+      "sector_id": "SECTOR-A",
+      "priority_score": 31
+    },
+    "timestamp": "2026-08-27T10:30:06.000Z"
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000305",
+    "mission_id": "MISSION-DEMO-1",
+    "actor_user_id": "00000000-0000-4000-8000-000000000002",
+    "action": "mission.started",
+    "entity_type": "mission",
+    "entity_id": "MISSION-DEMO-1",
+    "payload": {
+      "from": "created",
+      "to": "active"
+    },
+    "timestamp": "2026-08-27T10:30:00.000Z"
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000304",
+    "mission_id": "MISSION-DEMO-1",
+    "actor_user_id": "00000000-0000-4000-8000-000000000002",
+    "action": "sector.updated",
+    "entity_type": "sector",
+    "entity_id": "SECTOR-A",
+    "payload": {
+      "assigned_drone_id": "DRONE-01"
+    },
+    "timestamp": "2026-08-27T10:29:30.000Z"
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000303",
+    "mission_id": "MISSION-DEMO-1",
+    "actor_user_id": "00000000-0000-4000-8000-000000000002",
+    "action": "sector.assigned",
+    "entity_type": "sector",
+    "entity_id": null,
+    "payload": {
+      "count": 3,
+      "sector_ids": [
+        "SECTOR-A",
+        "SECTOR-B",
+        "SECTOR-C"
+      ],
+      "source": "zone-split"
+    },
+    "timestamp": "2026-08-27T10:29:01.000Z"
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000302",
+    "mission_id": "MISSION-DEMO-1",
+    "actor_user_id": "00000000-0000-4000-8000-000000000002",
+    "action": "mission.created",
+    "entity_type": "mission",
+    "entity_id": "MISSION-DEMO-1",
+    "payload": {
+      "name": "Yamuna Flood Plain — Demo Sweep",
+      "sector_count": 3
+    },
+    "timestamp": "2026-08-27T10:29:00.000Z"
+  },
+  {
+    "id": "00000000-0000-4000-8000-000000000301",
+    "mission_id": null,
+    "actor_user_id": "00000000-0000-4000-8000-000000000002",
+    "action": "auth.login",
+    "entity_type": "user",
+    "entity_id": "00000000-0000-4000-8000-000000000002",
+    "payload": {
+      "email": "operator@resqnet.demo",
+      "role": "operator"
+    },
+    "timestamp": "2026-08-27T10:28:00.000Z"
+  }
+]

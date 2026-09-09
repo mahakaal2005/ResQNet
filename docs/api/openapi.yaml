@@ -390,22 +390,22 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid, description: Surrogate key. }
-        missionId:
+        mission_id:
           type: string
           description: External identifier every other service puts on the wire.
           example: MISSION-DEMO-1
         name: { type: string }
         status: { type: string, enum: [created, active, paused, completed] }
-        zonePolygon: { $ref: '#/components/schemas/GeoJsonPolygon' }
-        sectorCount: { type: integer }
-        createdBy: { type: [string, 'null'], format: uuid }
-        startedAt:
+        zone_polygon: { $ref: '#/components/schemas/GeoJsonPolygon' }
+        sector_count: { type: integer }
+        created_by: { type: [string, 'null'], format: uuid }
+        started_at:
           type: [string, 'null']
           format: date-time
           description: Set on the first activation only — the PRD Section 15 metric measures from mission start, not from the last resume.
-        completedAt: { type: [string, 'null'], format: date-time }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
 
     CreateSector:
       type: object
@@ -427,20 +427,20 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
-        missionId: { type: string, example: MISSION-DEMO-1 }
-        sectorId: { type: string, example: SECTOR-A }
+        mission_id: { type: string, example: MISSION-DEMO-1 }
+        sector_id: { type: string, example: SECTOR-A }
         polygon: { $ref: '#/components/schemas/GeoJsonPolygon' }
-        assignedDroneId: { type: [string, 'null'], example: DRONE-01 }
-        createdAt: { type: string, format: date-time }
+        assigned_drone_id: { type: [string, 'null'], example: DRONE-01 }
+        created_at: { type: string, format: date-time }
 
     AuditLogEntry:
       type: object
       properties:
         id: { type: string, format: uuid }
-        missionId:
+        mission_id:
           type: [string, 'null']
           description: Null for actions that are not mission-scoped, such as a login.
-        actorUserId:
+        actor_user_id:
           type: [string, 'null']
           format: uuid
           description: Null when the system itself is the actor.
@@ -453,7 +453,7 @@ components:
             `sector.assigned`, `sector.created`, `sector.updated`, and
             `incident.*` when the intelligence modules run. Full vocabulary and
             per-action payload keys: `docs/contracts/audit-log.md`.
-        entityType: { type: [string, 'null'], example: mission }
-        entityId: { type: [string, 'null'], example: MISSION-DEMO-1 }
+        entity_type: { type: [string, 'null'], example: mission }
+        entity_id: { type: [string, 'null'], example: MISSION-DEMO-1 }
         payload: { type: object, additionalProperties: true }
         timestamp: { type: string, format: date-time }

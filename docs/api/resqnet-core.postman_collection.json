@@ -112,9 +112,9 @@
               "pm.test('201 with the zone already split into 3 sectors', () => {",
               "  pm.response.to.have.status(201);",
               "  pm.expect(body.status).to.eql('created');",
-              "  pm.expect(body.sectors.map((s) => s.sectorId)).to.eql(['SECTOR-A', 'SECTOR-B', 'SECTOR-C']);",
+              "  pm.expect(body.sectors.map((s) => s.sector_id)).to.eql(['SECTOR-A', 'SECTOR-B', 'SECTOR-C']);",
               "});",
-              "pm.collectionVariables.set('missionId', body.missionId);"
+              "pm.collectionVariables.set('missionId', body.mission_id);"
             ]
           }
         }
@@ -170,7 +170,7 @@
             "exec": [
               "pm.test('201, drone assigned', () => {",
               "  pm.response.to.have.status(201);",
-              "  pm.expect(pm.response.json().assignedDroneId).to.eql('DRONE-01');",
+              "  pm.expect(pm.response.json().assigned_drone_id).to.eql('DRONE-01');",
               "});"
             ]
           }
@@ -228,7 +228,7 @@
               "pm.test('active, with started_at set', () => {",
               "  pm.response.to.have.status(200);",
               "  pm.expect(pm.response.json().status).to.eql('active');",
-              "  pm.expect(pm.response.json().startedAt).to.not.eql(null);",
+              "  pm.expect(pm.response.json().started_at).to.not.eql(null);",
               "});"
             ]
           }
@@ -291,7 +291,7 @@
               "pm.test('completed, with completed_at set', () => {",
               "  pm.response.to.have.status(200);",
               "  pm.expect(pm.response.json().status).to.eql('completed');",
-              "  pm.expect(pm.response.json().completedAt).to.not.eql(null);",
+              "  pm.expect(pm.response.json().completed_at).to.not.eql(null);",
               "});"
             ]
           }

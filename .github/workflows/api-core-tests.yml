@@ -54,3 +54,11 @@ jobs:
       # which is also the proof that the core schema stands without 0001.
       - name: Integration test (Testcontainers)
         run: npm run demo:core
+
+      # The Section 28 contract test against a real neighbour: our publisher
+      # emitting over a real socket to a real Socket.IO server applying
+      # Chirag's own acceptance guard. Catches the failure that is otherwise
+      # silent — a payload the gateway drops without an error, leaving the
+      # drones motionless. No container needed, so it costs seconds.
+      - name: Contract test (mission events -> realtime gateway)
+        run: npm run demo:realtime

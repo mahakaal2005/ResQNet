@@ -21,7 +21,7 @@ services:
       POSTGRES_PASSWORD: resqnet
       POSTGRES_DB: resqnet
     ports:
-      - "5432:5432"
+      - "${DB_PORT_HOST:-5432}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
       # Postgres runs every .sql here in filename order on an empty data
@@ -50,11 +50,31 @@ services:
       # The migrations above are the schema of record; never let TypeORM
       # reshape a schema another owner also writes to.
       DB_SYNCHRONIZE: "false"
-      # Override in any environment that is not a laptop demo.
+      # Public, checked-in value so the independent demo runs with no .env.
+      # Override in any environment that is not a laptop demo — the API refuses
+      # to boot on the fallback when NODE_ENV=production and none is supplied.
       JWT_SECRET: ${JWT_SECRET:-resqnet-dev-secret-change-me}
+      # Unset by default, which keeps mission events in-process and this demo
+      # independent of Chirag's gateway (Section 1's design law). For the
+      # integrated run, start apps/realtime and point this at it:
+      #   REALTIME_GATEWAY_URL=http://host.docker.internal:4000 docker compose up api
+      REALTIME_GATEWAY_URL: ${REALTIME_GATEWAY_URL:-}
       PORT: "3000"
+    # Host port is overridable because 3000 is a popular port on a dev laptop:
+    #   API_PORT=3100 docker compose up -d db api
+    # The container port stays 3000, so nothing inside has to change.
     ports:
-      - "3000:3000"
+      - "${API_PORT:-3000}:3000"
+    # `docker compose ps` reports "healthy" only once the app actually serves a
+    # request, not merely when the port opens — so a demo script (or Chirag's
+    # gateway) can wait on real readiness instead of sleeping. Probes GET /,
+    # the one route outside this track's folders that is guaranteed to exist.
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   # One-shot: `docker compose run --rm seed`. Idempotent, so it doubles as the
   # "reset the demo" command between rehearsal runs.

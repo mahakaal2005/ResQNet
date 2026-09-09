@@ -10,6 +10,7 @@ import type { SuperTestStatic } from 'supertest';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditModule } from '../src/audit/audit.module.js';
+import type { AuditLogResponse } from '../src/audit/audit.presenter.js';
 import { AuditLog } from '../src/audit/entities/audit-log.entity.js';
 import { AuthModule } from '../src/auth/auth.module.js';
 import { User } from '../src/auth/entities/user.entity.js';
@@ -17,6 +18,7 @@ import { Mission } from '../src/missions/entities/mission.entity.js';
 import { MissionsModule } from '../src/missions/missions.module.js';
 import { OperatorsModule } from '../src/operators/operators.module.js';
 import { Sector } from '../src/sectors/entities/sector.entity.js';
+import type { SectorResponse } from '../src/sectors/sector.presenter.js';
 import { SectorsModule } from '../src/sectors/sectors.module.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -201,7 +203,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
       .expect(201);
 
     expect(created.body.status).toBe('created');
-    expect(created.body.sectors.map((s: Sector) => s.sectorId)).toEqual([
+    expect(created.body.sectors.map((s: SectorResponse) => s.sector_id)).toEqual([
       'SECTOR-A',
       'SECTOR-B',
       'SECTOR-C',
@@ -216,7 +218,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
       .get(`/missions/${created.body.id}`)
       .set('Authorization', `Bearer ${operatorToken}`)
       .expect(200);
-    expect(byUuid.body.missionId).toBe(byExternalId.body.missionId);
+    expect(byUuid.body.mission_id).toBe(byExternalId.body.mission_id);
 
     await request(http)
       .get('/missions/MISSION-DOES-NOT-EXIST')
@@ -288,7 +290,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
       })
       .expect(201);
 
-    expect(pinned.body.assignedDroneId).toBe('DRONE-01');
+    expect(pinned.body.assigned_drone_id).toBe('DRONE-01');
 
     // Upsert, not duplicate: still exactly three sectors.
     const sectors = await request(http)
@@ -296,7 +298,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
       .set('Authorization', `Bearer ${operatorToken}`)
       .expect(200);
     expect(sectors.body).toHaveLength(3);
-    expect(sectors.body[0].assignedDroneId).toBe('DRONE-01');
+    expect(sectors.body[0].assigned_drone_id).toBe('DRONE-01');
 
     // Outside the mission zone.
     await request(http)
@@ -364,7 +366,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
       .set('Authorization', `Bearer ${operatorToken}`)
       .send({ status: 'active' })
       .expect(200);
-    expect(started.body.startedAt).toBeTruthy();
+    expect(started.body.started_at).toBeTruthy();
 
     // Invalid: active -> created.
     await request(http)
@@ -405,7 +407,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
       .set('Authorization', `Bearer ${operatorToken}`)
       .expect(200);
 
-    const actions = scoped.body.map((entry: AuditLog) => entry.action);
+    const actions = scoped.body.map((entry: AuditLogResponse) => entry.action);
     expect(actions).toContain('mission.created');
     expect(actions).toContain('mission.started');
     expect(actions).toContain('mission.paused');
@@ -415,7 +417,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
     expect(actions).toContain('sector.assigned');
     expect(actions).toContain('sector.updated');
     expect(actions).toContain('sector.created');
-    expect(scoped.body.every((e: AuditLog) => e.missionId === 'MISSION-E2E-1')).toBe(true);
+    expect(scoped.body.every((e: AuditLogResponse) => e.mission_id === 'MISSION-E2E-1')).toBe(true);
     // Newest first.
     expect(actions[0]).toBe('mission.completed');
 
@@ -426,7 +428,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
     );
 
     // The split is one action, not one row per sector.
-    const assigned = scoped.body.filter((e: AuditLog) => e.action === 'sector.assigned');
+    const assigned = scoped.body.filter((e: AuditLogResponse) => e.action === 'sector.assigned');
     expect(assigned).toHaveLength(1);
     expect(assigned[0].payload).toMatchObject({
       count: 3,
@@ -434,12 +436,12 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
     });
 
     // Every mission-scoped action names the operator who took it.
-    expect(scoped.body.every((e: AuditLog) => e.actorUserId !== null)).toBe(true);
+    expect(scoped.body.every((e: AuditLogResponse) => e.actor_user_id !== null)).toBe(true);
 
     // Rejected writes leave no trace: SECTOR-AA and the out-of-zone SECTOR-D
     // both 400'd, and only the one accepted SECTOR-D write is recorded.
-    const sectorRows = scoped.body.filter((e: AuditLog) => e.entityType === 'sector');
-    expect(sectorRows.map((e: AuditLog) => e.entityId).filter(Boolean).sort()).toEqual([
+    const sectorRows = scoped.body.filter((e: AuditLogResponse) => e.entity_type === 'sector');
+    expect(sectorRows.map((e: AuditLogResponse) => e.entity_id).filter(Boolean).sort()).toEqual([
       'SECTOR-A',
       'SECTOR-D',
     ]);
@@ -449,7 +451,7 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
       .get('/audit-logs')
       .set('Authorization', `Bearer ${operatorToken}`)
       .expect(200);
-    const allActions = all.body.map((entry: AuditLog) => entry.action);
+    const allActions = all.body.map((entry: AuditLogResponse) => entry.action);
     expect(allActions).toContain('auth.login');
     expect(allActions).toContain('auth.login_failed');
   });

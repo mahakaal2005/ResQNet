@@ -6,6 +6,7 @@ import { Permissions } from '../auth/permissions.decorator.js';
 import { PermissionsGuard } from '../auth/permissions.guard.js';
 import { CreateMissionDto } from './dto/create-mission.dto.js';
 import { UpdateMissionStatusDto } from './dto/update-mission-status.dto.js';
+import { toMissionResponse, toMissionWithSectorsResponse } from './mission.presenter.js';
 import { MissionsService } from './missions.service.js';
 
 @Controller('missions')
@@ -15,30 +16,31 @@ export class MissionsController {
 
   @Post()
   @Permissions('mission:create')
-  create(@Body() dto: CreateMissionDto, @CurrentUser() user?: AuthenticatedUser) {
-    return this.missions.create(dto, user);
+  async create(@Body() dto: CreateMissionDto, @CurrentUser() user?: AuthenticatedUser) {
+    const { sectors, ...mission } = await this.missions.create(dto, user);
+    return toMissionWithSectorsResponse(mission, sectors);
   }
 
   @Get()
   @Permissions('mission:read')
-  findAll() {
-    return this.missions.findAll();
+  async findAll() {
+    return (await this.missions.findAll()).map(toMissionResponse);
   }
 
   /** `:id` accepts the uuid or the external mission_id ('MISSION-DEMO-1'). */
   @Get(':id')
   @Permissions('mission:read')
-  findOne(@Param('id') id: string) {
-    return this.missions.findOne(id);
+  async findOne(@Param('id') id: string) {
+    return toMissionResponse(await this.missions.findOne(id));
   }
 
   @Patch(':id/status')
   @Permissions('mission:update-status')
-  updateStatus(
+  async updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateMissionStatusDto,
     @CurrentUser() user?: AuthenticatedUser,
   ) {
-    return this.missions.updateStatus(id, dto.status, user);
+    return toMissionResponse(await this.missions.updateStatus(id, dto.status, user));
   }
 }

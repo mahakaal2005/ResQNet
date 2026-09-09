@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { Permissions } from '../auth/permissions.decorator.js';
 import { PermissionsGuard } from '../auth/permissions.guard.js';
 import { CreateSectorDto } from './dto/create-sector.dto.js';
+import { toSectorResponse } from './sector.presenter.js';
 import { SectorsService } from './sectors.service.js';
 
 @Controller()
@@ -14,13 +15,15 @@ export class SectorsController {
 
   @Post('sectors')
   @Permissions('sector:create')
-  create(@Body() dto: CreateSectorDto, @CurrentUser() user?: AuthenticatedUser) {
-    return this.sectors.upsert(
-      dto.mission_id,
-      dto.sector_id,
-      dto.polygon,
-      dto.assigned_drone_id,
-      user,
+  async create(@Body() dto: CreateSectorDto, @CurrentUser() user?: AuthenticatedUser) {
+    return toSectorResponse(
+      await this.sectors.upsert(
+        dto.mission_id,
+        dto.sector_id,
+        dto.polygon,
+        dto.assigned_drone_id,
+        user,
+      ),
     );
   }
 
@@ -29,7 +32,7 @@ export class SectorsController {
   // one direction of dependency only (MissionsModule -> SectorsModule).
   @Get('missions/:id/sectors')
   @Permissions('sector:read')
-  findForMission(@Param('id') id: string) {
-    return this.sectors.findForMission(id);
+  async findForMission(@Param('id') id: string) {
+    return (await this.sectors.findForMission(id)).map(toSectorResponse);
   }
 }
