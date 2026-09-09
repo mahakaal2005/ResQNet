@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { randomUUID } from 'node:crypto';
@@ -6,10 +10,14 @@ import { Repository } from 'typeorm';
 import { Detection } from '../geolocation-intake/entities/detection.entity.js';
 import { Geolocation } from '../geolocation-intake/entities/geolocation.entity.js';
 import { PriorityService } from '../priority/priority.service.js';
+import type { AuthenticatedUser } from '../auth/jwt.config.js';
 import { DedupCandidate, findDuplicateIncident } from './dedup.js';
 import { IncidentEvent } from './entities/incident-event.entity.js';
 import { Incident, IncidentStatus } from './entities/incident.entity.js';
-import { assertValidTransition, InvalidIncidentTransitionError } from './incident-state-machine.js';
+import {
+  assertValidTransition,
+  InvalidIncidentTransitionError,
+} from './incident-state-machine.js';
 
 // Placeholder until a road/access-point dataset is wired in (Phase 1 has no
 // such dataset). Documented in docs/contracts/priority-weights.md.
@@ -74,7 +82,12 @@ export class IncidentsService {
       status: 'open',
       firstSeen: detection.timestamp,
       lastSeen: detection.timestamp,
-      evidence: [{ frame_ref: detection.detectionId, detection_id: detection.detectionId }],
+      evidence: [
+        {
+          frame_ref: detection.detectionId,
+          detection_id: detection.detectionId,
+        },
+      ],
       sourceDrones: [detection.droneId],
       sectorId: detection.sectorId,
       operatorConfirmed: false,
@@ -82,7 +95,9 @@ export class IncidentsService {
     });
 
     const saved = await this.incidents.save(incident);
-    await this.logEvent(saved.incidentId, 'incident.created', { detection_id: detection.detectionId });
+    await this.logEvent(saved.incidentId, 'incident.created', {
+      detection_id: detection.detectionId,
+    });
     this.events.emit('incident.created', saved);
     return saved;
   }
@@ -122,18 +137,26 @@ export class IncidentsService {
     const minutesSinceLastMovement =
       (incident.lastSeen.getTime() - incident.firstSeen.getTime()) / 60_000;
 
-    const breakdown = await this.priorityService.scoreAndPersist(incident.incidentId, {
-      peopleCount: incident.survivorCountEstimate,
-      isolationScore: DEFAULT_ISOLATION_SCORE,
-      minutesSinceLastMovement,
-      distressFlag: incident.distressFlag,
-    });
+    const breakdown = await this.priorityService.scoreAndPersist(
+      incident.incidentId,
+      {
+        peopleCount: incident.survivorCountEstimate,
+        isolationScore: DEFAULT_ISOLATION_SCORE,
+        minutesSinceLastMovement,
+        distressFlag: incident.distressFlag,
+      },
+    );
 
     incident.priorityScore = breakdown.total;
     await this.incidents.save(incident);
 
-    await this.logEvent(incident.incidentId, 'incident.priority_changed', { ...breakdown });
-    this.events.emit('incident.priority_changed', { incidentId: incident.incidentId, breakdown });
+    await this.logEvent(incident.incidentId, 'incident.priority_changed', {
+      ...breakdown,
+    });
+    this.events.emit('incident.priority_changed', {
+      incidentId: incident.incidentId,
+      breakdown,
+    });
   }
 
   async findAll(): Promise<Incident[]> {
@@ -142,7 +165,8 @@ export class IncidentsService {
 
   async findOne(incidentId: string): Promise<Incident> {
     const incident = await this.incidents.findOne({ where: { incidentId } });
-    if (!incident) throw new NotFoundException(`Incident ${incidentId} not found`);
+    if (!incident)
+      throw new NotFoundException(`Incident ${incidentId} not found`);
     return incident;
   }
 
@@ -150,6 +174,7 @@ export class IncidentsService {
     incidentId: string,
     nextStatus: IncidentStatus,
     distressFlag?: boolean,
+    actor?: AuthenticatedUser,
   ): Promise<Incident> {
     const incident = await this.findOne(incidentId);
     try {
@@ -168,8 +193,10 @@ export class IncidentsService {
     if (distressFlag !== undefined) incident.distressFlag = distressFlag;
 
     const saved = await this.incidents.save(incident);
-    await this.logEvent(saved.incidentId, 'incident.updated', { status: nextStatus });
-    this.events.emit('incident.updated', saved);
+    await this.logEvent(saved.incidentId, 'incident.updated', {
+      status: nextStatus,
+    });
+    this.events.emit('incident.updated', { ...saved, actorUserId: actor?.id });
 
     if (distressChanged) {
       await this.rescorePriority(saved);

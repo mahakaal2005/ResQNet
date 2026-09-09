@@ -1,4 +1,14 @@
-import { Body, Controller, Get, NotFoundException, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  UseGuards,
+} from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/jwt.config.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { Permissions } from '../auth/permissions.decorator.js';
 import { PermissionsGuard } from '../auth/permissions.guard.js';
@@ -29,15 +39,22 @@ export class IncidentsController {
 
   @Patch('incidents/:id/status')
   @Permissions('incident:update-status')
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateIncidentStatusDto) {
-    return this.incidents.updateStatus(id, dto.status, dto.distress_flag);
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateIncidentStatusDto,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.incidents.updateStatus(id, dto.status, dto.distress_flag, user);
   }
 
   @Get('incidents/:id/priority-breakdown')
   @Permissions('incident:read')
   async priorityBreakdown(@Param('id') id: string) {
     const breakdown = await this.incidents.priorityBreakdown(id);
-    if (!breakdown) throw new NotFoundException(`No priority score recorded for incident ${id}`);
+    if (!breakdown)
+      throw new NotFoundException(
+        `No priority score recorded for incident ${id}`,
+      );
     return breakdown;
   }
 }

@@ -7,7 +7,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import {
+  GenericContainer,
+  Wait,
+  type StartedTestContainer,
+} from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AuditLog } from '../src/audit/entities/audit-log.entity.js';
 import { AuthModule } from '../src/auth/auth.module.js';
@@ -26,6 +30,9 @@ const MIGRATION_PATH = path.resolve(
   __dirname,
   '../../../database/migrations/0001_rudra_intelligence_tables.sql',
 );
+
+const VIEWER_ID = '00000000-0000-4000-8000-000000000001';
+const OPERATOR_ID = '00000000-0000-4000-8000-000000000002';
 
 const CORE_MIGRATION_PATH = path.resolve(
   __dirname,
@@ -72,6 +79,21 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
     await client.connect();
     await client.query(readFileSync(MIGRATION_PATH, 'utf-8'));
     await client.query(readFileSync(CORE_MIGRATION_PATH, 'utf-8'));
+    await client.query(
+      'INSERT INTO users (id, email, password_hash, full_name, role) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
+      [
+        VIEWER_ID,
+        'viewer@resqnet.test',
+        'test-hash',
+        'Viewer E2E',
+        'viewer',
+        OPERATOR_ID,
+        'operator@resqnet.test',
+        'test-hash',
+        'Operator E2E',
+        'operator',
+      ],
+    );
     await client.end();
 
     const moduleRef = await Test.createTestingModule({
@@ -83,7 +105,15 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
           username: 'resqnet',
           password: 'resqnet',
           database: 'resqnet',
-          entities: [User, AuditLog, Detection, Geolocation, Incident, IncidentEvent, PriorityScore],
+          entities: [
+            User,
+            AuditLog,
+            Detection,
+            Geolocation,
+            Incident,
+            IncidentEvent,
+            PriorityScore,
+          ],
           synchronize: false,
         }),
         EventEmitterModule.forRoot(),
@@ -97,8 +127,18 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
     app = moduleRef.createNestApplication();
     await app.init();
     const jwt = app.get(JwtService);
-    viewerToken = await jwt.signAsync({ sub: 'viewer-e2e', email: 'viewer@resqnet.test', role: 'viewer', typ: 'access' });
-    operatorToken = await jwt.signAsync({ sub: 'operator-e2e', email: 'operator@resqnet.test', role: 'operator', typ: 'access' });
+    viewerToken = await jwt.signAsync({
+      sub: VIEWER_ID,
+      email: 'viewer@resqnet.test',
+      role: 'viewer',
+      typ: 'access',
+    });
+    operatorToken = await jwt.signAsync({
+      sub: OPERATOR_ID,
+      email: 'operator@resqnet.test',
+      role: 'operator',
+      typ: 'access',
+    });
   }, 120_000);
 
   afterAll(async () => {
@@ -227,6 +267,30 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
       .set('Authorization', `Bearer ${viewerToken}`)
       .send({ status: 'resolved' })
       .expect(403);
+
+    let incidentAudit: Array<{ action?: string; actorUserId?: string }> = [];
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const audit = await request(http)
+        .get('/audit-logs')
+        .set('Authorization', `Bearer ${operatorToken}`)
+        .expect(200);
+      incidentAudit = audit.body;
+      if (
+        incidentAudit.some(
+          (entry) =>
+            entry.action === 'incident.updated' &&
+            entry.actorUserId === OPERATOR_ID,
+        )
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(incidentAudit).toContainEqual(
+      expect.objectContaining({
+        action: 'incident.updated',
+        actorUserId: OPERATOR_ID,
+      }),
+    );
 
     // dispatched -> confirmed is not a valid forward transition
     await request(http)
