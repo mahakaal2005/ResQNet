@@ -265,10 +265,15 @@ paths:
       tags: [audit]
       summary: Operator action trail, newest first
       description: |
-        A read-only, non-blocking consumer (Section 3). Mission actions, auth
-        events and — when the intelligence modules are running — incident
-        lifecycle events all land here. Logins are not mission-scoped, so they
-        appear only in the unfiltered log.
+        A read-only, non-blocking consumer (Section 3). Mission actions, sector
+        assignment, auth events and — when the intelligence modules are running
+        — incident lifecycle events all land here. Logins are not
+        mission-scoped, so they appear only in the unfiltered log.
+
+        A rejected request writes nothing: a 400 or a 403 leaves no audit row.
+
+        Writing a row never fails the action that produced it, so treat this as
+        a near-complete trail rather than a transactional ledger.
       parameters:
         - name: mission_id
           in: query
@@ -442,7 +447,12 @@ components:
         action:
           type: string
           example: mission.started
-          description: 'auth.login, auth.login_failed, mission.created, mission.started, mission.paused, mission.completed, and incident.* when the intelligence modules run.'
+          description: |
+            `auth.login`, `auth.login_failed`, `mission.created`,
+            `mission.started`, `mission.paused`, `mission.completed`,
+            `sector.assigned`, `sector.created`, `sector.updated`, and
+            `incident.*` when the intelligence modules run. Full vocabulary and
+            per-action payload keys: `docs/contracts/audit-log.md`.
         entityType: { type: [string, 'null'], example: mission }
         entityId: { type: [string, 'null'], example: MISSION-DEMO-1 }
         payload: { type: object, additionalProperties: true }

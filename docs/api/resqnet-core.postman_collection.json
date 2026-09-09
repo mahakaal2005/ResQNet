@@ -1,0 +1,468 @@
+{
+  "info": {
+    "name": "ResQNet — Backend Core",
+    "description": "Owner: Charan. The Section 3 independent demo as an importable collection: login -> create mission -> assign sectors -> drive the state machine -> read the audit trail, with zero other services running.\n\nBring the API up first:\n\n    docker compose up -d db api\n    docker compose run --rm seed\n\nThen run this collection in order (or with the Collection Runner). 'Login' stores the access token in a collection variable; 'Create mission' stores the new mission_id, so every later request targets the mission this run created. Prose walkthrough: docs/api/core-demo.md",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "email", "value": "operator@resqnet.demo" },
+    { "key": "password", "value": "resqnet-demo" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "viewerToken", "value": "" },
+    {
+      "key": "missionId",
+      "value": "MISSION-DEMO-1",
+      "description": "Overwritten by 'Create mission'. The seeded mission is the default so every request works before that step runs."
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test('200 with a Bearer token pair', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(body.token_type).to.eql('Bearer');",
+              "  pm.expect(body.access_token).to.be.a('string');",
+              "  pm.expect(body.refresh_token).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('accessToken', body.access_token);",
+              "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "description": "A wrong password returns the same 401 message a missing account does, so an attacker learns nothing about which addresses exist."
+      }
+    },
+    {
+      "name": "2. Refresh the session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test('200 with a fresh pair', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('accessToken', body.access_token);",
+              "pm.collectionVariables.set('refreshToken', body.refresh_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}"
+        },
+        "description": "Stateless: no refresh_tokens table. The users row is re-read on every refresh, so a role change or a deleted account takes effect on the next call."
+      }
+    },
+    {
+      "name": "3. Who am I (GET /operators/me)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('returns the caller and their permission list', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().permissions).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": { "raw": "{{baseUrl}}/operators/me", "host": ["{{baseUrl}}"], "path": ["operators", "me"] },
+        "description": "Returns permissions, not just the role, so the dashboard can hide controls without hard-coding the RBAC matrix."
+      }
+    },
+    {
+      "name": "4. Create mission (demo step 1 + 2)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test('201 with the zone already split into 3 sectors', () => {",
+              "  pm.response.to.have.status(201);",
+              "  pm.expect(body.status).to.eql('created');",
+              "  pm.expect(body.sectors.map((s) => s.sectorId)).to.eql(['SECTOR-A', 'SECTOR-B', 'SECTOR-C']);",
+              "});",
+              "pm.collectionVariables.set('missionId', body.missionId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": { "raw": "{{baseUrl}}/missions", "host": ["{{baseUrl}}"], "path": ["missions"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Yamuna Flood Plain — Live Sweep\",\n  \"sector_count\": 3,\n  \"zone_polygon\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [[[77.2, 28.61], [77.22, 28.61], [77.22, 28.62], [77.2, 28.62], [77.2, 28.61]]]\n  }\n}"
+        },
+        "description": "One call does demo step 1 ('operator draws disaster zone') and step 2 ('sector assignment'). GeoJSON is [lon, lat], SRID 4326. The mission starts in 'created' — nothing flies until step 7 moves it to 'active'."
+      }
+    },
+    {
+      "name": "5. Reject a bad zone (expects 400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400, and nothing was written', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": { "raw": "{{baseUrl}}/missions", "host": ["{{baseUrl}}"], "path": ["missions"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Unclosed ring\",\n  \"sector_count\": 3,\n  \"zone_polygon\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [[[77.2, 28.61], [77.22, 28.61], [77.22, 28.62]]]\n  }\n}"
+        },
+        "description": "The zone is planned before the mission row is inserted, so an unusable zone leaves no half-created mission behind. A sector_count above 26 fails the same way — that is the SECTOR-[A-Z] ceiling the frozen telemetry contract imposes."
+      }
+    },
+    {
+      "name": "6. Pin a sector and assign a drone",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201, drone assigned', () => {",
+              "  pm.response.to.have.status(201);",
+              "  pm.expect(pm.response.json().assignedDroneId).to.eql('DRONE-01');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": { "raw": "{{baseUrl}}/sectors", "host": ["{{baseUrl}}"], "path": ["sectors"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mission_id\": \"{{missionId}}\",\n  \"sector_id\": \"SECTOR-A\",\n  \"assigned_drone_id\": \"DRONE-01\",\n  \"polygon\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [[[77.2, 28.61], [77.21, 28.61], [77.21, 28.615], [77.2, 28.615], [77.2, 28.61]]]\n  }\n}"
+        },
+        "description": "Upsert, not insert: this replaces the strip the zone split generated for SECTOR-A rather than colliding with it. A polygon outside the mission zone is rejected with 400."
+      }
+    },
+    {
+      "name": "7. List the mission's sectors",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('still 3 sectors — step 6 was an upsert', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json()).to.have.lengthOf(3);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/missions/{{missionId}}/sectors",
+          "host": ["{{baseUrl}}"],
+          "path": ["missions", "{{missionId}}", "sectors"]
+        },
+        "description": "Ordered by sector_id, so SECTOR-A is always first on the dashboard. ':id' accepts the uuid or the external mission_id."
+      }
+    },
+    {
+      "name": "8. Start the mission (publishes mission.started)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('active, with started_at set', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().status).to.eql('active');",
+              "  pm.expect(pm.response.json().startedAt).to.not.eql(null);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/missions/{{missionId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["missions", "{{missionId}}", "status"]
+        },
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"active\"\n}" },
+        "description": "Publishes mission.started, which Chirag's gateway consumes to start simulated drone motion. Nothing else in the demo needs to be running for this to succeed."
+      }
+    },
+    {
+      "name": "9. Pause the mission",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('paused', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().status).to.eql('paused');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/missions/{{missionId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["missions", "{{missionId}}", "status"]
+        },
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"paused\"\n}" },
+        "description": "Publishes mission.paused. Resuming re-publishes mission.started — Section 10.6 defines exactly three mission events, and restarting drone motion is what the gateway wants on a resume anyway."
+      }
+    },
+    {
+      "name": "10. Complete the mission",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('completed, with completed_at set', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().status).to.eql('completed');",
+              "  pm.expect(pm.response.json().completedAt).to.not.eql(null);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/missions/{{missionId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["missions", "{{missionId}}", "status"]
+        },
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"completed\"\n}" },
+        "description": "Terminal. Re-sending any status after this returns 400 — the state machine rejects it before any event is published."
+      }
+    },
+    {
+      "name": "11. Reject an invalid transition (expects 400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 — completed is terminal', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/missions/{{missionId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["missions", "{{missionId}}", "status"]
+        },
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"active\"\n}" }
+      }
+    },
+    {
+      "name": "12. Read the audit trail",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const actions = pm.response.json().map((entry) => entry.action);",
+              "pm.test('every action in this run was recorded', () => {",
+              "  pm.response.to.have.status(200);",
+              "  ['mission.created', 'sector.assigned', 'sector.updated', 'mission.started', 'mission.paused', 'mission.completed']",
+              "    .forEach((action) => pm.expect(actions).to.include(action));",
+              "});",
+              "pm.test('newest first', () => pm.expect(actions[0]).to.eql('mission.completed'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/audit-logs?mission_id={{missionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["audit-logs"],
+          "query": [{ "key": "mission_id", "value": "{{missionId}}" }]
+        },
+        "description": "Newest first, each row naming the operator who took the action. Logins are not mission-scoped, so auth.login appears only in the unfiltered GET /audit-logs."
+      }
+    },
+    {
+      "name": "13. Log in as the viewer",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('viewerToken', pm.response.json().access_token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"viewer@resqnet.demo\",\n  \"password\": \"resqnet-demo\"\n}"
+        },
+        "description": "The read-only district-authority account from PRD Section 6."
+      }
+    },
+    {
+      "name": "14. Viewer may read the mission",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('200 — viewers read everything', () => pm.response.to.have.status(200));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{viewerToken}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/missions/{{missionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["missions", "{{missionId}}"]
+        }
+      }
+    },
+    {
+      "name": "15. Viewer may not change it (expects 403)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 — viewer is strictly read-only', () => pm.response.to.have.status(403));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{viewerToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/missions/{{missionId}}/status",
+          "host": ["{{baseUrl}}"],
+          "path": ["missions", "{{missionId}}", "status"]
+        },
+        "body": { "mode": "raw", "raw": "{\n  \"status\": \"active\"\n}" },
+        "description": "Roles nest: viewer subset of operator subset of admin. The matrix lives in apps/api/src/auth/rbac.ts."
+      }
+    },
+    {
+      "name": "16. A refresh token cannot authorise a request (expects 401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 — refresh tokens only work at /auth/refresh', () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{refreshToken}}" }],
+        "url": { "raw": "{{baseUrl}}/operators/me", "host": ["{{baseUrl}}"], "path": ["operators", "me"] },
+        "description": "The two token types are distinguished by a 'typ' claim, and JwtAuthGuard accepts only 'access'."
+      }
+    }
+  ]
+}

@@ -1,8 +1,20 @@
 # Mission & Sector Contracts
 
+**Version: 1.0 · Status: FROZEN for Phase 1.**
+
 Owner: Charan. Consumed by Chirag (starts/stops simulated drone motion on the
 mission events) and Ayush (renders the zone, sectors and mission controls).
-Any shape change requires sign-off from both before merge.
+Any shape change requires sign-off from both before merge, and bumps the
+version above (Section 28: contracts owned are frozen, documented and
+versioned).
+
+Frozen means the field names, types and event names below will not change for
+the rest of Phase 1. Additive, optional fields are the only change that does
+not need a version bump — anything a consumer already reads stays put.
+
+| Version | Change |
+|---|---|
+| 1.0 | Initial freeze: Mission, Sector, the mission state machine, the three Section 10.6 events, and the audit actions those produce. |
 
 ## Mission
 
@@ -82,15 +94,41 @@ Invalid transitions are rejected with `400`.
 
 ## Events published
 
-| Event | Fires when | Payload |
-|---|---|---|
-| `mission.started` | `created → active` **and** `paused → active` | `{ mission_id, status }` |
-| `mission.paused` | `active → paused` | `{ mission_id, status }` |
-| `mission.completed` | `active\|paused → completed` | `{ mission_id, status }` |
+| Event | Fires when |
+|---|---|
+| `mission.started` | `created → active` **and** `paused → active` |
+| `mission.paused` | `active → paused` |
+| `mission.completed` | `active\|paused → completed` |
+
+All three carry the same payload:
+
+```json
+{
+  "mission_id": "MISSION-DEMO-1",
+  "name": "Yamuna Flood Plain — Demo Sweep",
+  "status": "active",
+  "sector_count": 3,
+  "started_at": "2026-08-27T10:30:00.000Z",
+  "completed_at": null
+}
+```
+
+`mission_id` and `status` are the two fields Section 10.6 requires and the two
+Chirag's gateway reads; the rest are there so the dashboard can render a
+mission header without a follow-up `GET`. Emitted via `EventEmitter2`; Chirag's
+gateway bridges them onto the `/realtime` namespace.
 
 Section 10.6 defines exactly three mission events, so a resume re-emits
 `mission.started` rather than introducing a fourth — which is also the effect
 Chirag's gateway wants, since it restarts drone motion on that event.
+
+## Audit actions
+
+Every write above lands in the audit trail: `mission.created`,
+`sector.assigned` (one row per zone split), `sector.created` /
+`sector.updated`, and the three mission events. Shapes and payload keys:
+[`audit-log.md`](audit-log.md). Token and RBAC shapes:
+[`auth-session.md`](auth-session.md).
 
 ## RBAC
 
