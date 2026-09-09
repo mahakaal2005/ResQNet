@@ -19,6 +19,7 @@ import { resolveMissionScope, type SectorScope } from './mission-scope.js';
  */
 interface IncidentEventPayload {
   incidentId?: string;
+  actorUserId?: string;
   sectorId?: string;
   status?: string;
   priorityScore?: number;
@@ -40,7 +41,10 @@ export class IncidentAuditListener {
       missionId: await this.missionForSector(incident?.sectorId),
       entityType: 'incident',
       entityId: incident?.incidentId ?? null,
-      payload: { sector_id: incident?.sectorId, priority_score: incident?.priorityScore },
+      payload: {
+        sector_id: incident?.sectorId,
+        priority_score: incident?.priorityScore,
+      },
     });
   }
 
@@ -49,9 +53,13 @@ export class IncidentAuditListener {
     await this.audit.record({
       action: 'incident.updated',
       missionId: await this.missionForSector(incident?.sectorId),
+      actorUserId: incident?.actorUserId,
       entityType: 'incident',
       entityId: incident?.incidentId ?? null,
-      payload: { status: incident?.status, operator_confirmed: incident?.operatorConfirmed },
+      payload: {
+        status: incident?.status,
+        operator_confirmed: incident?.operatorConfirmed,
+      },
     });
   }
 

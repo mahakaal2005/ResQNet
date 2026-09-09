@@ -33,6 +33,14 @@ describe('PermissionsGuard', () => {
     }
   });
 
+  it('lets a viewer read incidents but blocks incident status changes', () => {
+    expect(guardRequiring('incident:read').canActivate(contextFor('viewer'))).toBe(true);
+    expect(() => guardRequiring('incident:update-status').canActivate(contextFor('viewer'))).toThrow(
+      ForbiddenException,
+    );
+    expect(guardRequiring('incident:update-status').canActivate(contextFor('operator'))).toBe(true);
+  });
+
   it('lets a viewer read missions and the audit log', () => {
     expect(guardRequiring('mission:read', 'audit:read').canActivate(contextFor('viewer'))).toBe(
       true,
