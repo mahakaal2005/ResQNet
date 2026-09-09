@@ -1,4 +1,6 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator.js';
+import type { AuthenticatedUser } from '../auth/jwt.config.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { Permissions } from '../auth/permissions.decorator.js';
 import { PermissionsGuard } from '../auth/permissions.guard.js';
@@ -12,12 +14,13 @@ export class SectorsController {
 
   @Post('sectors')
   @Permissions('sector:create')
-  create(@Body() dto: CreateSectorDto) {
+  create(@Body() dto: CreateSectorDto, @CurrentUser() user?: AuthenticatedUser) {
     return this.sectors.upsert(
       dto.mission_id,
       dto.sector_id,
       dto.polygon,
       dto.assigned_drone_id,
+      user,
     );
   }
 

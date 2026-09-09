@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { AuditService } from '../audit/audit.service.js';
+import type { AuthenticatedUser } from '../auth/jwt.config.js';
 import { Mission } from '../missions/entities/mission.entity.js';
 import { missionWhere } from '../missions/mission-lookup.js';
 import { Sector } from './entities/sector.entity.js';
@@ -10,6 +12,7 @@ import {
   isWithin,
   splitZoneIntoSectors,
   type GeoJsonPolygon,
+  type SectorDefinition,
 } from './sector-geometry.js';
 
 @Injectable()
@@ -19,21 +22,34 @@ export class SectorsService {
     private readonly sectors: Repository<Sector>,
     @InjectRepository(Mission)
     private readonly missions: Repository<Mission>,
+    private readonly audit: AuditService,
   ) {}
 
   /**
-   * Cuts a mission zone into `count` equal strips and stores them. Called once
-   * when a mission is created, so every mission has a usable sector layout
-   * before an operator touches POST /sectors — this is demo step 2 ("sector
-   * assignment") in Section 27.
+   * Cuts a mission zone into `count` equal strips. Pure — nothing is written —
+   * so MissionsService can reject an unusable zone before it inserts the
+   * mission row, which is what keeps `mission.created` and `sector.assigned`
+   * in true chronological order in the audit trail.
+   */
+  planZoneSplit(zone: GeoJsonPolygon, count: number): SectorDefinition[] {
+    try {
+      return splitZoneIntoSectors(zone, count);
+    } catch (error) {
+      if (error instanceof InvalidPolygonError) throw new BadRequestException(error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Stores a planned sector layout. Called once when a mission is created, so
+   * every mission has a usable layout before an operator touches POST /sectors
+   * — this is demo step 2 ("sector assignment") in Section 27.
    */
   async assignFromZone(
     missionId: string,
-    zone: GeoJsonPolygon,
-    count: number,
+    definitions: SectorDefinition[],
+    actor?: AuthenticatedUser,
   ): Promise<Sector[]> {
-    const definitions = this.split(zone, count);
-
     const rows = definitions.map((definition) =>
       this.sectors.create({
         missionId,
@@ -43,7 +59,25 @@ export class SectorsService {
       }),
     );
 
-    return this.sectors.save(rows);
+    const saved = await this.sectors.save(rows);
+
+    // One row for the whole split, not one per sector: this is a single
+    // operator action ("sector assignment", demo step 2), and N rows per
+    // mission creation would bury the mission events around it.
+    await this.audit.record({
+      action: 'sector.assigned',
+      missionId,
+      actorUserId: actor?.id ?? null,
+      entityType: 'sector',
+      entityId: null,
+      payload: {
+        count: saved.length,
+        sector_ids: saved.map((sector) => sector.sectorId),
+        source: 'zone-split',
+      },
+    });
+
+    return saved;
   }
 
   /**
@@ -59,6 +93,7 @@ export class SectorsService {
     sectorId: string,
     polygon: GeoJsonPolygon,
     assignedDroneId?: string,
+    actor?: AuthenticatedUser,
   ): Promise<Sector> {
     const mission = await this.missions.findOne({ where: missionWhere(missionIdOrUuid) });
     if (!mission) throw new NotFoundException(`Mission ${missionIdOrUuid} not found`);
@@ -88,7 +123,21 @@ export class SectorsService {
       assignedDroneId: assignedDroneId ?? existing?.assignedDroneId ?? null,
     });
 
-    return this.sectors.save(row);
+    const saved = await this.sectors.save(row);
+
+    // `sector.updated` when it replaced a definition the zone-split had
+    // already claimed, so the trail distinguishes an operator refining a
+    // sector from one appearing for the first time.
+    await this.audit.record({
+      action: existing ? 'sector.updated' : 'sector.created',
+      missionId: mission.missionId,
+      actorUserId: actor?.id ?? null,
+      entityType: 'sector',
+      entityId: saved.sectorId,
+      payload: { assigned_drone_id: saved.assignedDroneId },
+    });
+
+    return saved;
   }
 
   /** Ordered by sector_id so SECTOR-A always comes first on the dashboard. */
@@ -100,15 +149,5 @@ export class SectorsService {
       where: { missionId: mission.missionId },
       order: { sectorId: 'ASC' },
     });
-  }
-
-  /** Maps the pure geometry module's errors onto HTTP 400. */
-  private split(zone: GeoJsonPolygon, count: number) {
-    try {
-      return splitZoneIntoSectors(zone, count);
-    } catch (error) {
-      if (error instanceof InvalidPolygonError) throw new BadRequestException(error.message);
-      throw error;
-    }
   }
 }

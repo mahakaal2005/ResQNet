@@ -326,6 +326,29 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
       .set('Authorization', `Bearer ${operatorToken}`)
       .send({ mission_id: 'MISSION-E2E-1', sector_id: 'SECTOR-AA', polygon: ZONE })
       .expect(400);
+
+    // A label the zone split never claimed: an insert, not an upsert, so this
+    // is the path that audits as `sector.created` rather than `sector.updated`.
+    await request(http)
+      .post('/sectors')
+      .set('Authorization', `Bearer ${operatorToken}`)
+      .send({
+        mission_id: 'MISSION-E2E-1',
+        sector_id: 'SECTOR-D',
+        polygon: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [77.205, 28.612],
+              [77.215, 28.612],
+              [77.215, 28.618],
+              [77.205, 28.618],
+              [77.205, 28.612],
+            ],
+          ],
+        },
+      })
+      .expect(201);
   });
 
   it('drives the mission state machine and publishes the Section 10.6 events', async () => {
@@ -387,9 +410,39 @@ describe('Backend core (auth -> missions -> sectors -> audit)', () => {
     expect(actions).toContain('mission.started');
     expect(actions).toContain('mission.paused');
     expect(actions).toContain('mission.completed');
+    // The "assign sectors" link in the Section 3 chain: the zone split, an
+    // operator refining a generated sector, and an operator adding a new one.
+    expect(actions).toContain('sector.assigned');
+    expect(actions).toContain('sector.updated');
+    expect(actions).toContain('sector.created');
     expect(scoped.body.every((e: AuditLog) => e.missionId === 'MISSION-E2E-1')).toBe(true);
     // Newest first.
     expect(actions[0]).toBe('mission.completed');
+
+    // Chronology, read oldest-first: the mission exists before its sectors do.
+    const oldestFirst = [...actions].reverse();
+    expect(oldestFirst.indexOf('mission.created')).toBeLessThan(
+      oldestFirst.indexOf('sector.assigned'),
+    );
+
+    // The split is one action, not one row per sector.
+    const assigned = scoped.body.filter((e: AuditLog) => e.action === 'sector.assigned');
+    expect(assigned).toHaveLength(1);
+    expect(assigned[0].payload).toMatchObject({
+      count: 3,
+      sector_ids: ['SECTOR-A', 'SECTOR-B', 'SECTOR-C'],
+    });
+
+    // Every mission-scoped action names the operator who took it.
+    expect(scoped.body.every((e: AuditLog) => e.actorUserId !== null)).toBe(true);
+
+    // Rejected writes leave no trace: SECTOR-AA and the out-of-zone SECTOR-D
+    // both 400'd, and only the one accepted SECTOR-D write is recorded.
+    const sectorRows = scoped.body.filter((e: AuditLog) => e.entityType === 'sector');
+    expect(sectorRows.map((e: AuditLog) => e.entityId).filter(Boolean).sort()).toEqual([
+      'SECTOR-A',
+      'SECTOR-D',
+    ]);
 
     // Logins are not mission-scoped, so they appear only in the unfiltered log.
     const all = await request(http)

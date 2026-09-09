@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service.js';
 import type { AuthenticatedUser } from '../auth/jwt.config.js';
-import { InvalidPolygonError, type GeoJsonPolygon } from '../sectors/sector-geometry.js';
+import { type GeoJsonPolygon } from '../sectors/sector-geometry.js';
 import { SectorsService } from '../sectors/sectors.service.js';
 import { Sector } from '../sectors/entities/sector.entity.js';
 import { Mission, MissionStatus } from './entities/mission.entity.js';
@@ -48,6 +48,11 @@ export class MissionsService {
       throw new BadRequestException(`Mission ${missionId} already exists`);
     }
 
+    // Planned before the mission row is inserted: an unusable zone is rejected
+    // with nothing written, so there is no half-created mission to undo and
+    // `mission.created` always precedes `sector.assigned` in the audit trail.
+    const plan = this.sectorsService.planZoneSplit(input.zone_polygon, input.sector_count);
+
     const mission = await this.missions.save(
       this.missions.create({
         missionId,
@@ -61,21 +66,6 @@ export class MissionsService {
       }),
     );
 
-    let sectors: Sector[];
-    try {
-      sectors = await this.sectorsService.assignFromZone(
-        missionId,
-        input.zone_polygon,
-        input.sector_count,
-      );
-    } catch (error) {
-      // The zone was rejected only after the mission row landed; drop it again
-      // rather than leaving a mission with no sectors behind.
-      await this.missions.delete({ id: mission.id });
-      if (error instanceof InvalidPolygonError) throw new BadRequestException(error.message);
-      throw error;
-    }
-
     await this.audit.record({
       action: 'mission.created',
       missionId,
@@ -84,6 +74,18 @@ export class MissionsService {
       entityId: missionId,
       payload: { name: mission.name, sector_count: mission.sectorCount },
     });
+
+    let sectors: Sector[];
+    try {
+      sectors = await this.sectorsService.assignFromZone(missionId, plan, actor);
+    } catch (error) {
+      // Only an infrastructure failure can land here now that the plan is
+      // validated up front. Drop the mission rather than leave one behind with
+      // no sectors; the audit row survives with a null mission_id, which is the
+      // honest record that the attempt happened.
+      await this.missions.delete({ id: mission.id });
+      throw error;
+    }
 
     return { ...mission, sectors };
   }
