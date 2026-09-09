@@ -90,6 +90,18 @@ export class MissionRealtimePublisher implements OnModuleInit, OnModuleDestroy {
     this.socket?.close();
   }
 
+  /**
+   * Whether the gateway link is live — publishing is a no-op while it is not.
+   *
+   * Exposed because the server registering a socket and the client marking
+   * itself connected are not the same instant: anything waiting on this link
+   * has to gate on the client's own view, not the server's, or it races the
+   * handshake and loses the first event to the drop rule above.
+   */
+  get connected(): boolean {
+    return this.socket?.connected ?? false;
+  }
+
   @OnEvent('mission.started')
   onStarted(payload: unknown): void {
     this.publish('mission.started', payload);

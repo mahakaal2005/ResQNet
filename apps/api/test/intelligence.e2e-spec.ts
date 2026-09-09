@@ -268,7 +268,9 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
       .send({ status: 'resolved' })
       .expect(403);
 
-    let incidentAudit: Array<{ action?: string; actorUserId?: string }> = [];
+    // snake_case: GET /audit-logs serialises through audit.presenter.ts, which
+    // matches docs/contracts/audit-log.md and mock_audit_logs.json.
+    let incidentAudit: Array<{ action?: string; actor_user_id?: string }> = [];
     for (let attempt = 0; attempt < 20; attempt += 1) {
       const audit = await request(http)
         .get('/audit-logs')
@@ -279,7 +281,7 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
         incidentAudit.some(
           (entry) =>
             entry.action === 'incident.updated' &&
-            entry.actorUserId === OPERATOR_ID,
+            entry.actor_user_id === OPERATOR_ID,
         )
       )
         break;
@@ -288,7 +290,7 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
     expect(incidentAudit).toContainEqual(
       expect.objectContaining({
         action: 'incident.updated',
-        actorUserId: OPERATOR_ID,
+        actor_user_id: OPERATOR_ID,
       }),
     );
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -28,6 +28,8 @@ interface IncidentEventPayload {
 
 @Injectable()
 export class IncidentAuditListener {
+  private readonly logger = new Logger(IncidentAuditListener.name);
+
   constructor(
     private readonly audit: AuditService,
     @InjectRepository(Sector)
@@ -88,18 +90,32 @@ export class IncidentAuditListener {
    * Maps a sector label onto its mission via our own `sectors` table, ignoring
    * completed missions so a finished demo run cannot make a live label
    * ambiguous. Reads only tables this track owns.
+   *
+   * Scoping is a best-effort enrichment, never a precondition: the
+   * intelligence modules run standalone against migration 0001 alone, where
+   * `sectors` is neither a registered entity nor an existing table. Letting
+   * that throw would abort the handler *before* `AuditService.record()` and
+   * silently drop the incident row entirely — which is exactly what it did,
+   * breaking Rudra's independent demo. An unscoped row beats no row.
    */
   private async missionForSector(sectorId?: string): Promise<string | null> {
     if (!sectorId) return null;
 
-    const candidates = await this.sectors
-      .createQueryBuilder('sector')
-      .innerJoin(Mission, 'mission', 'mission.mission_id = sector.mission_id')
-      .where('sector.sector_id = :sectorId', { sectorId })
-      .andWhere('mission.status != :completed', { completed: 'completed' })
-      .select('sector.mission_id', 'missionId')
-      .getRawMany<SectorScope>();
+    try {
+      const candidates = await this.sectors
+        .createQueryBuilder('sector')
+        .innerJoin(Mission, 'mission', 'mission.mission_id = sector.mission_id')
+        .where('sector.sector_id = :sectorId', { sectorId })
+        .andWhere('mission.status != :completed', { completed: 'completed' })
+        .select('sector.mission_id', 'missionId')
+        .getRawMany<SectorScope>();
 
-    return resolveMissionScope(candidates);
+      return resolveMissionScope(candidates);
+    } catch (error) {
+      this.logger.debug(
+        `Could not scope sector ${sectorId} to a mission; recording the row unscoped. ${(error as Error).message}`,
+      );
+      return null;
+    }
   }
 }

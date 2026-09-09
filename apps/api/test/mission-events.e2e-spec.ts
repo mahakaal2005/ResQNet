@@ -81,7 +81,10 @@ describe('Mission events reach the realtime gateway', () => {
     publisher = new MissionRealtimePublisher(`http://localhost:${port}`);
     publisher.onModuleInit();
 
-    await waitFor(() => io.of(REALTIME_NAMESPACE).sockets.size === 1);
+    // Both sides, not just the server's: the publisher drops an event while
+    // its own socket reports disconnected, so gating only on the server's
+    // socket count races the handshake and loses the first emit.
+    await waitFor(() => publisher.connected && io.of(REALTIME_NAMESPACE).sockets.size === 1);
   }, 30_000);
 
   afterAll(async () => {
@@ -92,6 +95,7 @@ describe('Mission events reach the realtime gateway', () => {
 
   it('connects to the /realtime namespace the contract fixes', () => {
     expect(io.of(REALTIME_NAMESPACE).sockets.size).toBe(1);
+    expect(publisher.connected).toBe(true);
   });
 
   it('delivers mission.started in a shape the gateway accepts', async () => {

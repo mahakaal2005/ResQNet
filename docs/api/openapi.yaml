@@ -561,16 +561,6 @@ components:
         completed_at: { type: [string, 'null'], format: date-time }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
-        zonePolygon: { $ref: "#/components/schemas/GeoJsonPolygon" }
-        sectorCount: { type: integer }
-        createdBy: { type: [string, "null"], format: uuid }
-        startedAt:
-          type: [string, "null"]
-          format: date-time
-          description: Set on the first activation only — the PRD Section 15 metric measures from mission start, not from the last resume.
-        completedAt: { type: [string, "null"], format: date-time }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
 
     CreateSector:
       type: object
@@ -601,11 +591,6 @@ components:
         polygon: { $ref: '#/components/schemas/GeoJsonPolygon' }
         assigned_drone_id: { type: [string, 'null'], example: DRONE-01 }
         created_at: { type: string, format: date-time }
-        missionId: { type: string, example: MISSION-DEMO-1 }
-        sectorId: { type: string, example: SECTOR-A }
-        polygon: { $ref: "#/components/schemas/GeoJsonPolygon" }
-        assignedDroneId: { type: [string, "null"], example: DRONE-01 }
-        createdAt: { type: string, format: date-time }
 
     PixelPoint:
       type: object
@@ -788,6 +773,7 @@ components:
         time_factor: { type: integer, minimum: 0, maximum: 20 }
         distress_flag: { type: integer, minimum: 0, maximum: 20 }
         total: { type: integer, minimum: 0, maximum: 90 }
+
     AuditLogEntry:
       type: object
       properties:
@@ -797,13 +783,11 @@ components:
           description: Null for actions that are not mission-scoped, such as a login.
         actor_user_id:
           type: [string, 'null']
-        missionId:
-          type: [string, "null"]
-          description: Null for actions that are not mission-scoped, such as a login.
-        actorUserId:
-          type: [string, "null"]
           format: uuid
-          description: Null when the system itself is the actor.
+          description: |
+            The operator who took the action. Null when the system itself is the
+            actor — incident rows raised off the event bus rather than by a
+            request, for instance.
         action:
           type: string
           example: mission.started
@@ -815,8 +799,5 @@ components:
             per-action payload keys: `docs/contracts/audit-log.md`.
         entity_type: { type: [string, 'null'], example: mission }
         entity_id: { type: [string, 'null'], example: MISSION-DEMO-1 }
-          description: "auth.login, auth.login_failed, mission.created, mission.started, mission.paused, mission.completed, and incident.* when the intelligence modules run."
-        entityType: { type: [string, "null"], example: mission }
-        entityId: { type: [string, "null"], example: MISSION-DEMO-1 }
         payload: { type: object, additionalProperties: true }
         timestamp: { type: string, format: date-time }

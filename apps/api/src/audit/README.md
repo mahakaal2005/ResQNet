@@ -30,6 +30,12 @@ incident event cannot name its mission. Without help, every incident row would
 be missing from `GET /audit-logs?mission_id=` — the one query the dashboard
 runs — which would make "the whole story of a mission in one query" false.
 
+Scoping never gates the write. `sectors` does not exist when the intelligence
+modules run standalone against 0001 alone, and a throw there would abort the
+handler before `AuditService.record()` — dropping the row entirely, with only a
+logged error, because @nestjs/event-emitter swallows handler exceptions.
+`incident-audit.listener.spec.ts` pins that behaviour.
+
 `mission-scope.ts` closes that: the listener maps the sector label back through
 our own `sectors` table, ignoring completed missions. Phase 1 runs one live
 mission at a time, so a label normally resolves to exactly one. When it does
