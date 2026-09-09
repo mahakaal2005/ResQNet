@@ -16,14 +16,31 @@ export type Permission =
   | 'sector:read'
   | 'audit:read'
   | 'operator:read-self'
-  | 'user:manage';
+  | 'user:manage'
+  // Rudra (intelligence) — additive only, cross-owner edit, flagged for
+  // Charan's review. Confirming/dispatching an incident is the same kind of
+  // operator action as mission:update-status, so it follows the same rule.
+  | 'incident:read'
+  | 'incident:update-status';
 
-const VIEWER: Permission[] = ['mission:read', 'sector:read', 'audit:read', 'operator:read-self'];
+const VIEWER: Permission[] = [
+  'mission:read',
+  'sector:read',
+  'audit:read',
+  'operator:read-self',
+  'incident:read',
+];
 
 // Section 27 step 1 puts the operator in the driving seat ("operator draws
 // disaster zone"), so creating missions and sectors is an operator power, not
 // an admin-only one.
-const OPERATOR: Permission[] = [...VIEWER, 'mission:create', 'mission:update-status', 'sector:create'];
+const OPERATOR: Permission[] = [
+  ...VIEWER,
+  'mission:create',
+  'mission:update-status',
+  'sector:create',
+  'incident:update-status',
+];
 
 const ADMIN: Permission[] = [...OPERATOR, 'user:manage'];
 

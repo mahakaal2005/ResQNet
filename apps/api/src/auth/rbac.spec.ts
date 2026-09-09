@@ -19,6 +19,16 @@ describe('rbac', () => {
     expect(can('viewer', 'sector:create')).toBe(false);
   });
 
+  it('lets every signed-in role read incidents, but reserves incident actions to operators', () => {
+    for (const role of ['admin', 'operator', 'viewer'] as UserRole[]) {
+      expect(can(role, 'incident:read')).toBe(true);
+    }
+
+    expect(can('operator', 'incident:update-status')).toBe(true);
+    expect(can('admin', 'incident:update-status')).toBe(true);
+    expect(can('viewer', 'incident:update-status')).toBe(false);
+  });
+
   it('reserves user management to admin', () => {
     expect(can('admin', 'user:manage')).toBe(true);
     expect(can('operator', 'user:manage')).toBe(false);
