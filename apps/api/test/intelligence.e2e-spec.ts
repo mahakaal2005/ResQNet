@@ -1,13 +1,21 @@
 import { INestApplication } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import {
+  GenericContainer,
+  Wait,
+  type StartedTestContainer,
+} from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AuditLog } from '../src/audit/entities/audit-log.entity.js';
+import { AuthModule } from '../src/auth/auth.module.js';
+import { User } from '../src/auth/entities/user.entity.js';
 import { GeolocationIntakeModule } from '../src/geolocation-intake/geolocation-intake.module.js';
 import { Detection } from '../src/geolocation-intake/entities/detection.entity.js';
 import { Geolocation } from '../src/geolocation-intake/entities/geolocation.entity.js';
@@ -23,6 +31,14 @@ const MIGRATION_PATH = path.resolve(
   '../../../database/migrations/0001_rudra_intelligence_tables.sql',
 );
 
+const VIEWER_ID = '00000000-0000-4000-8000-000000000001';
+const OPERATOR_ID = '00000000-0000-4000-8000-000000000002';
+
+const CORE_MIGRATION_PATH = path.resolve(
+  __dirname,
+  '../../../database/migrations/0002_charan_core_tables.sql',
+);
+
 /**
  * This is the integration test called out in the role doc:
  * "feed 2 overlapping detections -> exactly 1 incident created, not 2;
@@ -34,6 +50,8 @@ const MIGRATION_PATH = path.resolve(
 describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priority)', () => {
   let container: StartedTestContainer;
   let app: INestApplication;
+  let viewerToken: string;
+  let operatorToken: string;
 
   beforeAll(async () => {
     container = await new GenericContainer('postgis/postgis:16-3.4')
@@ -60,6 +78,22 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
     });
     await client.connect();
     await client.query(readFileSync(MIGRATION_PATH, 'utf-8'));
+    await client.query(readFileSync(CORE_MIGRATION_PATH, 'utf-8'));
+    await client.query(
+      'INSERT INTO users (id, email, password_hash, full_name, role) VALUES ($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)',
+      [
+        VIEWER_ID,
+        'viewer@resqnet.test',
+        'test-hash',
+        'Viewer E2E',
+        'viewer',
+        OPERATOR_ID,
+        'operator@resqnet.test',
+        'test-hash',
+        'Operator E2E',
+        'operator',
+      ],
+    );
     await client.end();
 
     const moduleRef = await Test.createTestingModule({
@@ -71,10 +105,19 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
           username: 'resqnet',
           password: 'resqnet',
           database: 'resqnet',
-          entities: [Detection, Geolocation, Incident, IncidentEvent, PriorityScore],
+          entities: [
+            User,
+            AuditLog,
+            Detection,
+            Geolocation,
+            Incident,
+            IncidentEvent,
+            PriorityScore,
+          ],
           synchronize: false,
         }),
         EventEmitterModule.forRoot(),
+        AuthModule,
         GeolocationIntakeModule,
         IncidentsModule,
         PriorityModule,
@@ -83,6 +126,19 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
 
     app = moduleRef.createNestApplication();
     await app.init();
+    const jwt = app.get(JwtService);
+    viewerToken = await jwt.signAsync({
+      sub: VIEWER_ID,
+      email: 'viewer@resqnet.test',
+      role: 'viewer',
+      typ: 'access',
+    });
+    operatorToken = await jwt.signAsync({
+      sub: OPERATOR_ID,
+      email: 'operator@resqnet.test',
+      role: 'operator',
+      typ: 'access',
+    });
   }, 120_000);
 
   afterAll(async () => {
@@ -145,7 +201,12 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
     const incidentId = second.body.incident.incidentId;
     expect(second.body.incident.survivorCountEstimate).toBe(2);
 
-    const all = await request(http).get('/incidents').expect(200);
+    await request(http).get('/incidents').expect(401);
+
+    const all = await request(http)
+      .get('/incidents')
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .expect(200);
     expect(all.body).toHaveLength(1);
     expect(all.body[0].incidentId).toBe(incidentId);
 
@@ -166,37 +227,75 @@ describe('Intelligence pipeline (Detection -> Geolocation -> Incident -> Priorit
       .expect(404);
   });
 
-  it('priority jumps by the documented distress_flag weight (+20) and rejects invalid transitions', async () => {
+  it('protects incident reads and updates while preserving priority and state rules', async () => {
     const { default: request } = await import('supertest');
     const http = app.getHttpServer();
 
-    const list = await request(http).get('/incidents').expect(200);
+    const list = await request(http)
+      .get('/incidents')
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .expect(200);
     const incidentId = list.body[0].incidentId;
 
     const before = await request(http)
       .get(`/incidents/${incidentId}/priority-breakdown`)
+      .set('Authorization', `Bearer ${viewerToken}`)
       .expect(200);
 
     await request(http)
       .patch(`/incidents/${incidentId}/status`)
+      .set('Authorization', `Bearer ${operatorToken}`)
       .send({ status: 'confirmed' })
       .expect(200);
 
     await request(http)
       .patch(`/incidents/${incidentId}/status`)
+      .set('Authorization', `Bearer ${operatorToken}`)
       .send({ status: 'dispatched', distress_flag: true })
       .expect(200);
 
     const after = await request(http)
       .get(`/incidents/${incidentId}/priority-breakdown`)
+      .set('Authorization', `Bearer ${viewerToken}`)
       .expect(200);
 
     expect(after.body.distress_flag - before.body.distress_flag).toBe(20);
     expect(after.body.total - before.body.total).toBe(20);
 
+    await request(http)
+      .patch(`/incidents/${incidentId}/status`)
+      .set('Authorization', `Bearer ${viewerToken}`)
+      .send({ status: 'resolved' })
+      .expect(403);
+
+    let incidentAudit: Array<{ action?: string; actorUserId?: string }> = [];
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const audit = await request(http)
+        .get('/audit-logs')
+        .set('Authorization', `Bearer ${operatorToken}`)
+        .expect(200);
+      incidentAudit = audit.body;
+      if (
+        incidentAudit.some(
+          (entry) =>
+            entry.action === 'incident.updated' &&
+            entry.actorUserId === OPERATOR_ID,
+        )
+      )
+        break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    expect(incidentAudit).toContainEqual(
+      expect.objectContaining({
+        action: 'incident.updated',
+        actorUserId: OPERATOR_ID,
+      }),
+    );
+
     // dispatched -> confirmed is not a valid forward transition
     await request(http)
       .patch(`/incidents/${incidentId}/status`)
+      .set('Authorization', `Bearer ${operatorToken}`)
       .send({ status: 'confirmed' })
       .expect(400);
   });
