@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "detection"))
-from detector import CandidateDetector
+from detector import CandidateDetector, DEFAULT_WEIGHTS, YoloDetector
 
 
 class CandidateDetectorTests(unittest.TestCase):
@@ -29,6 +29,24 @@ class CandidateDetectorTests(unittest.TestCase):
         frame = Path(__file__).parents[2] / "simulator" / "sample_frames" / "frame_00001.jpg"
         result = CandidateDetector().detect(frame, drone_id="DRONE-01", sector_id="SECTOR-A", timestamp="2026-08-27T10:30:00Z")
         self.assertEqual(result, [])
+
+
+class YoloDetectorTests(unittest.TestCase):
+    def test_raises_clear_error_when_weights_missing(self) -> None:
+        with self.assertRaises(FileNotFoundError):
+            YoloDetector(weights_path=Path("/nonexistent/weights.pt"))
+
+    @unittest.skipUnless(DEFAULT_WEIGHTS.is_file(), "trained weights not present; run src/training/train.py first")
+    def test_returns_frozen_contract_shape_with_real_weights(self) -> None:
+        frame = Path(__file__).parents[2] / "simulator" / "sample_frames" / "frame_00001.jpg"
+        detector = YoloDetector()
+        result = detector.detect(frame, drone_id="DRONE-01", sector_id="SECTOR-A", timestamp="2026-08-27T10:30:00Z")
+        for detection in result:
+            self.assertTrue(detection.detection_id.startswith("DET-"))
+            self.assertEqual(set(detection.bbox), {"x", "y", "w", "h"})
+            self.assertEqual(set(detection.centroid), {"x", "y"})
+            self.assertGreaterEqual(detection.confidence, 0.0)
+            self.assertLessEqual(detection.confidence, 1.0)
 
 
 if __name__ == "__main__":
