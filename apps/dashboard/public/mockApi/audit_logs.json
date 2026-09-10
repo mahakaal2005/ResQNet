@@ -1,0 +1,1 @@
+[{"id":"00000000-0000-4000-8000-000000000306","action":"incident.created","timestamp":"2026-08-27T10:30:06.000Z","payload":{"sector_id":"SECTOR-A","priority_score":31}},{"id":"00000000-0000-4000-8000-000000000305","action":"mission.started","timestamp":"2026-08-27T10:30:00.000Z","payload":{"to":"active"}}]

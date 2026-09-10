@@ -1,0 +1,22 @@
+{
+  "name": "resqnet",
+  "private": true,
+  "workspaces": [
+    "apps/simulator",
+    "apps/realtime",
+    "apps/dashboard"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces --if-present",
+    "dev:realtime": "npm run dev --workspace apps/realtime",
+    "dev:simulator": "npm run dev --workspace apps/simulator",
+    "dev:dashboard": "npm run dev --workspace apps/dashboard",
+    "fixtures": "npm run fixtures --workspace apps/simulator",
+    "contract-test": "ts-node --project apps/realtime/tsconfig.json scripts/validate_fixture.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "path": "^0.12.7"
+  }
+}

@@ -1,0 +1,64 @@
+# Owner: Charan (Backend Core / Platform Engineer)
+#
+# Separate from api-tests.yml (Rudra's) rather than edited into it: same app,
+# different owners, and Section 28 asks each of us to keep our own module
+# green. Both workflows run on develop and main, so the shared service is
+# covered from both sides.
+name: api tests (Charan — backend core)
+
+on:
+  push:
+    branches: [feature/backend-core, develop, main]
+    paths:
+      - "apps/api/**"
+      - "database/**"
+      - ".github/workflows/api-core-tests.yml"
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "database/**"
+      - ".github/workflows/api-core-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Pin npm to match the committed lockfile's generator
+        run: npm install -g npm@11.8.0
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit -p tsconfig.json
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      # login -> create mission -> assign sectors -> audit entries, against a
+      # real Postgres+PostGIS container with migration 0002 alone applied —
+      # which is also the proof that the core schema stands without 0001.
+      - name: Integration test (Testcontainers)
+        run: npm run demo:core
+
+      # The Section 28 contract test against a real neighbour: our publisher
+      # emitting over a real socket to a real Socket.IO server applying
+      # Chirag's own acceptance guard. Catches the failure that is otherwise
+      # silent — a payload the gateway drops without an error, leaving the
+      # drones motionless. No container needed, so it costs seconds.
+      - name: Contract test (mission events -> realtime gateway)
+        run: npm run demo:realtime

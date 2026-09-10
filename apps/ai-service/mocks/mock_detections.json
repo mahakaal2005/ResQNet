@@ -1,0 +1,29 @@
+[
+  {
+    "detection_id": "DET-01",
+    "drone_id": "DRONE-01",
+    "sector_id": "SECTOR-A",
+    "timestamp": "2026-08-27T10:30:20Z",
+    "bbox": { "x": 120, "y": 80, "w": 40, "h": 90 },
+    "confidence": 0.87,
+    "centroid": { "x": 140, "y": 125 }
+  },
+  {
+    "detection_id": "DET-02",
+    "drone_id": "DRONE-02",
+    "sector_id": "SECTOR-B",
+    "timestamp": "2026-08-27T10:30:22Z",
+    "bbox": { "x": 244, "y": 112, "w": 36, "h": 82 },
+    "confidence": 0.91,
+    "centroid": { "x": 262, "y": 153 }
+  },
+  {
+    "detection_id": "DET-03",
+    "drone_id": "DRONE-03",
+    "sector_id": "SECTOR-C",
+    "timestamp": "2026-08-27T10:30:24Z",
+    "bbox": { "x": 310, "y": 156, "w": 42, "h": 88 },
+    "confidence": 0.84,
+    "centroid": { "x": 331, "y": 200 }
+  }
+]

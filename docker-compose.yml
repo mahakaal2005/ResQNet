@@ -1,0 +1,98 @@
+# Owner: Charan (Section 3, secondary ownership: local Docker Compose bootstrap
+# for the whole team).
+#
+# The Section 3 independent demo, in three commands:
+#
+#   docker compose up -d db api
+#   docker compose run --rm seed
+#   curl -s localhost:3000/auth/login -H 'content-type: application/json' \
+#     -d '{"email":"operator@resqnet.demo","password":"resqnet-demo"}'
+#
+# No other service has to be running. See docs/api/openapi.yaml for the full
+# request collection.
+
+name: resqnet
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: resqnet
+      POSTGRES_PASSWORD: resqnet
+      POSTGRES_DB: resqnet
+    ports:
+      - "${DB_PORT_HOST:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Postgres runs every .sql here in filename order on an empty data
+      # directory: 0001 (Rudra, intelligence tables) then 0002 (Charan, core
+      # tables). Shared database, separate ownership — Section 11.
+      - ./database/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resqnet -d resqnet"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: resqnet
+      DB_PASSWORD: resqnet
+      DB_NAME: resqnet
+      # The migrations above are the schema of record; never let TypeORM
+      # reshape a schema another owner also writes to.
+      DB_SYNCHRONIZE: "false"
+      # Public, checked-in value so the independent demo runs with no .env.
+      # Override in any environment that is not a laptop demo — the API refuses
+      # to boot on the fallback when NODE_ENV=production and none is supplied.
+      JWT_SECRET: ${JWT_SECRET:-resqnet-dev-secret-change-me}
+      # Unset by default, which keeps mission events in-process and this demo
+      # independent of Chirag's gateway (Section 1's design law). For the
+      # integrated run, start apps/realtime and point this at it:
+      #   REALTIME_GATEWAY_URL=http://host.docker.internal:4000 docker compose up api
+      REALTIME_GATEWAY_URL: ${REALTIME_GATEWAY_URL:-}
+      PORT: "3000"
+    # Host port is overridable because 3000 is a popular port on a dev laptop:
+    #   API_PORT=3100 docker compose up -d db api
+    # The container port stays 3000, so nothing inside has to change.
+    ports:
+      - "${API_PORT:-3000}:3000"
+    # `docker compose ps` reports "healthy" only once the app actually serves a
+    # request, not merely when the port opens — so a demo script (or Chirag's
+    # gateway) can wait on real readiness instead of sleeping. Probes GET /,
+    # the one route outside this track's folders that is guaranteed to exist.
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # One-shot: `docker compose run --rm seed`. Idempotent, so it doubles as the
+  # "reset the demo" command between rehearsal runs.
+  seed:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: resqnet
+      DB_PASSWORD: resqnet
+      DB_NAME: resqnet
+    command: ["node", "database/seeds/seed.mjs"]
+    restart: "no"
+
+volumes:
+  db_data:
