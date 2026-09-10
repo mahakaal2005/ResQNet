@@ -15,4 +15,8 @@ live dashboard tabs, permit microphone access, and press **Connect survivor
 voice** in one tab; the other tab acts as the simulated survivor endpoint.
 If signalling or microphone access fails, the UI shows the radio/phone
 fallback. NAT-restricted deployments need a TURN server in addition to the
-public STUN entry.
+public STUN entry. `docker compose up turn` starts the local coturn relay; set
+`NEXT_PUBLIC_TURN_HOST` to the relay's externally reachable hostname (it
+defaults to `localhost`). Test relay behaviour over a genuinely restrictive
+network such as guest Wi-Fi or a phone hotspot—localhost usually uses a direct
+or STUN path and does not exercise TURN.

@@ -54,11 +54,7 @@ services:
       # Override in any environment that is not a laptop demo — the API refuses
       # to boot on the fallback when NODE_ENV=production and none is supplied.
       JWT_SECRET: ${JWT_SECRET:-resqnet-dev-secret-change-me}
-      # Unset by default, which keeps mission events in-process and this demo
-      # independent of Chirag's gateway (Section 1's design law). For the
-      # integrated run, start apps/realtime and point this at it:
-      #   REALTIME_GATEWAY_URL=http://host.docker.internal:4000 docker compose up api
-      REALTIME_GATEWAY_URL: ${REALTIME_GATEWAY_URL:-}
+      REALTIME_GATEWAY_URL: ${REALTIME_GATEWAY_URL:-http://realtime:4000}
       PORT: "3000"
     # Host port is overridable because 3000 is a popular port on a dev laptop:
     #   API_PORT=3100 docker compose up -d db api
@@ -93,6 +89,11 @@ services:
       DB_NAME: resqnet
     command: ["node", "database/seeds/seed.mjs"]
     restart: "no"
+
+  turn:
+    image: coturn/coturn:4.6
+    network_mode: host
+    command: ["-n", "--log-file=stdout", "--listening-port=3478", "--realm=resqnet.demo", "--user=resqnet:resqnet-turn"]
 
 volumes:
   db_data:
