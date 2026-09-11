@@ -95,5 +95,49 @@ services:
     network_mode: host
     command: ["-n", "--log-file=stdout", "--listening-port=3478", "--realm=resqnet.demo", "--user=resqnet:resqnet-turn"]
 
+  realtime:
+    build:
+      context: .
+      dockerfile: apps/realtime/Dockerfile
+    ports:
+      - "${REALTIME_PORT:-4000}:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:4000/realtime/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  simulator:
+    build:
+      context: .
+      dockerfile: apps/simulator/Dockerfile
+    depends_on:
+      realtime:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      GATEWAY_URL: http://realtime:4000
+      REALTIME_URL: http://realtime:4000
+      API_URL: http://api:3000
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+        NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-http://localhost:4000}
+    depends_on:
+      api:
+        condition: service_healthy
+      realtime:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-http://localhost:4000}
+    ports:
+      - "${DASHBOARD_PORT:-3001}:3000"
+
 volumes:
   db_data:

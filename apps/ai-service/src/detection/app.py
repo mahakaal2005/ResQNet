@@ -5,6 +5,15 @@ import json
 import tempfile
 from pathlib import Path
 
+# before
+from detector import CandidateDetector
+detector = CandidateDetector()
+
+# after
+from yolo_detector import YoloDetector
+import os
+detector = YoloDetector(weights=os.getenv("YOLO_WEIGHTS", "yolov8n.pt"))
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
 from detector import CandidateDetector
