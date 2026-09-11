@@ -3,3 +3,8 @@ uvicorn[standard]>=0.30,<1
 python-multipart>=0.0.9,<1
 opencv-python-headless>=4.10,<5
 numpy>=1.26,<3
+
+# Real inference: models/resqnet-person-v1.pt (see docs/api/model-card.md).
+# Moved from optional to required now that a trained weight file is committed
+# and app.py/pipeline.py auto-select YoloDetector when it's present.
+ultralytics>=8.3,<9

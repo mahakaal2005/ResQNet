@@ -1,8 +1,17 @@
-"""Small, dependency-light person-candidate detector used for the Week 1 demo.
+"""Person-candidate detectors for the aerial frame pipeline.
 
-It deliberately uses colour segmentation rather than claiming to be a trained
-YOLO model.  It gives the API a real image-processing path today and has one
-stable ``detect`` interface that can later be backed by a fine-tuned model.
+Two implementations share one ``detect(image_path, ...) -> list[Detection]``
+interface and the same frozen output contract, so callers (app.py,
+pipeline.py) can swap one for the other without changing anything else:
+
+- ``CandidateDetector``: colour-segmentation fallback, zero ML dependency.
+  Always available, useful for offline/no-weights demo runs.
+- ``YoloDetector``: real inference using a YOLOv8 model fine-tuned on
+  VisDrone's pedestrian+people classes (see src/training/train.py and
+  docs/api/model-card.md for the training run this repo's committed
+  weights came from). Falls back with a clear error if ultralytics isn't
+  installed or the weight file is missing -- it never silently degrades to
+  the colour detector, so a caller always knows which one actually ran.
 """
 from __future__ import annotations
 
@@ -53,6 +62,60 @@ class CandidateDetector:
             if area < self.min_area:
                 continue
             confidence = round(min(0.99, 0.55 + area / max(image.shape[0] * image.shape[1], 1) * 5), 3)
+            identity = f"{image_path.name}:{x}:{y}:{width}:{height}:{drone_id}:{timestamp}"
+            results.append(Detection(
+                detection_id=f"DET-{sha1(identity.encode()).hexdigest()[:12].upper()}",
+                drone_id=drone_id,
+                sector_id=sector_id,
+                timestamp=timestamp,
+                bbox={"x": x, "y": y, "w": width, "h": height},
+                confidence=confidence,
+                centroid={"x": x + width // 2, "y": y + height // 2},
+            ))
+        return results
+
+
+DEFAULT_WEIGHTS = Path(__file__).parents[2] / "models" / "resqnet-person-v1.pt"
+
+
+class YoloDetector:
+    """Real inference using a fine-tuned YOLOv8 person detector.
+
+    Confidence threshold defaults to 0.25 (ultralytics default) -- lower it
+    for recall-sensitive search-and-rescue use, raise it to cut false
+    positives for a noisy scene.
+    """
+
+    def __init__(self, weights_path: Path | str = DEFAULT_WEIGHTS, confidence_threshold: float = 0.25) -> None:
+        self.weights_path = Path(weights_path)
+        self.confidence_threshold = confidence_threshold
+        if not self.weights_path.is_file():
+            raise FileNotFoundError(
+                f"no trained weights at {self.weights_path} — run src/training/train.py first, "
+                "or pass an explicit weights_path"
+            )
+        try:
+            from ultralytics import YOLO
+        except ImportError as error:
+            raise ImportError(
+                "install the optional training/inference dependency first: pip install ultralytics"
+            ) from error
+        self._model = YOLO(str(self.weights_path))
+
+    def detect(self, image_path: Path, *, drone_id: str, sector_id: str, timestamp: str) -> list[Detection]:
+        image = cv2.imread(str(image_path))
+        if image is None:
+            raise ValueError(f"could not decode image: {image_path}")
+
+        prediction = self._model.predict(
+            source=str(image_path), conf=self.confidence_threshold, verbose=False
+        )[0]
+
+        results: list[Detection] = []
+        for box in prediction.boxes:
+            x1, y1, x2, y2 = (float(value) for value in box.xyxy[0])
+            x, y, width, height = int(x1), int(y1), int(round(x2 - x1)), int(round(y2 - y1))
+            confidence = round(float(box.conf[0]), 3)
             identity = f"{image_path.name}:{x}:{y}:{width}:{height}:{drone_id}:{timestamp}"
             results.append(Detection(
                 detection_id=f"DET-{sha1(identity.encode()).hexdigest()[:12].upper()}",

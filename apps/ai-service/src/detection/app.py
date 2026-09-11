@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import tempfile
 from pathlib import Path
 
@@ -16,21 +18,44 @@ detector = YoloDetector(weights=os.getenv("YOLO_WEIGHTS", "yolov8n.pt"))
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 
-from detector import CandidateDetector
+from detector import CandidateDetector, DEFAULT_WEIGHTS, YoloDetector
 import sys
 sys.path.extend([str(Path(__file__).parents[1] / "tracking"), str(Path(__file__).parents[1] / "geolocation")])
 from tracker import MultiFrameTracker
 from geolocator import FlatGroundGeolocator
 
+logger = logging.getLogger("resqnet.detection")
+
 app = FastAPI(title="ResQNet Detection Service", version="1.0.0")
-detector = CandidateDetector()
+
+
+def _select_detector() -> CandidateDetector | YoloDetector:
+    """RESQNET_DETECTOR=color forces the fallback; RESQNET_DETECTOR=yolo
+    requires real weights and fails loudly if they're missing. Auto (default)
+    uses YOLO when trained weights are present, color otherwise -- but always
+    logs which one actually loaded, so a caller can tell without guessing."""
+    mode = os.environ.get("RESQNET_DETECTOR", "auto").lower()
+    if mode == "color":
+        logger.info("detector: CandidateDetector (colour segmentation, forced by RESQNET_DETECTOR=color)")
+        return CandidateDetector()
+    if mode == "yolo":
+        logger.info("detector: YoloDetector (forced by RESQNET_DETECTOR=yolo)")
+        return YoloDetector()
+    if DEFAULT_WEIGHTS.is_file():
+        logger.info("detector: YoloDetector (auto-selected, trained weights found at %s)", DEFAULT_WEIGHTS)
+        return YoloDetector()
+    logger.info("detector: CandidateDetector (auto-selected, no trained weights at %s)", DEFAULT_WEIGHTS)
+    return CandidateDetector()
+
+
+detector = _select_detector()
 tracker = MultiFrameTracker()
 locator = FlatGroundGeolocator()
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "detector": type(detector).__name__}
 
 
 @app.post("/ai/detect")

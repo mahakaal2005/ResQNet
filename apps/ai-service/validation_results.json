@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "true_positives": 673,
+    "false_positives": 726,
+    "false_negatives": 2582,
+    "precision": 0.4811,
+    "recall": 0.2068,
+    "images_evaluated": 120,
+    "dataset": "VisDrone2019-DET val split, pedestrian+people classes remapped to person",
+    "model": "YOLOv8n fine-tuned, resqnet-person-v1"
+  }
+]
