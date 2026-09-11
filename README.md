@@ -1,93 +1,115 @@
-# ResQNet — Chirag's Track (Backend Realtime + Simulator)
+# ResQNet
 
-Week 1 deliverable per the Team Role Distribution plan. This covers everything
-in `apps/realtime/`, `apps/simulator/`, and the shared `packages/contracts/telemetry.schema.json`.
+ResQNet is an SIH disaster-response prototype that turns drone observations into actionable rescue information. It combines simulated multi-drone telemetry, person detection, tracking, geolocation, incident prioritisation, realtime updates, a command dashboard, and a browser-based voice demo.
 
-## What's here
+It is a **human-supervised decision-support system**: detections are evidence for responders to verify, not autonomous rescue or flight-control decisions.
 
-```
-packages/contracts/
-  telemetry.schema.json   ← FROZEN. Owner: Chirag. Co-sign: Atul.
-  README.md                ← event ownership table (drone.*, network.*, sync.*, mission.*)
+## What the MVP demonstrates
 
-apps/simulator/
-  src/sectors.ts            3 demo sectors + synthetic ground-truth survivor coords
-  src/droneAgent.ts         deterministic lawnmower-path telemetry generator
-  src/generateFixtures.ts   writes sample_telemetry.json + sample_frames/ + ground_truth.json
-  src/index.ts              live mode: streams 3 drones to the gateway at 1Hz
-  sample_telemetry.json     120 pre-generated packets (3 drones × 40 ticks) — Faiqua/Atul's Week 1 fixture
-  ground_truth.json         known lat/lon per sector, for Atul's geolocation error scoring
-  sample_frames/            15 placeholder frame files + manifest.json
+1. A simulator assigns three drones to search sectors and streams telemetry.
+2. The Python AI service detects people in RGB frames with the checked-in YOLO model (with a deterministic colour-detector fallback for fixtures).
+3. Detections are tracked, projected to geographic coordinates, and sent to the API in detection-then-geolocation order.
+4. The API stores incidents, avoids duplicate records, calculates an explainable priority score, and records audit events.
+5. The Next.js command dashboard shows a live OpenStreetMap view, drone positions, incidents, evidence, priority breakdowns, and audit history.
+6. WebRTC voice uses the realtime gateway for signalling; coturn is included for NAT-restricted demo networks.
 
-apps/realtime/
-  src/gateway/server.ts           Express health check + Socket.IO /realtime namespace
-  src/gateway/telemetryValidator.ts   ajv validation against the frozen schema
-  src/drone-state/stateMachine.ts     connected / lost / reconnected FSM
-  src/drone-state/missionState.ts     mocked mission.started until Charan's API is live
-  tests/                          11 passing unit tests
+## Architecture
+
+```text
+Simulator / drone telemetry ──> Realtime gateway ──> Dashboard
+          │                                      │
+          └─> AI service (YOLO → tracking → geo) └─> API + PostGIS
+                                                        │
+                                                        └─> incidents, priority, audit
 ```
 
-## Setup
+| Component | Location | Default port | Role |
+| --- | --- | ---: | --- |
+| Dashboard | `apps/dashboard` | 3001 | Operator command interface and map |
+| API | `apps/api` | 3000 | Auth, missions, incidents, priority and audit APIs |
+| Realtime gateway | `apps/realtime` | 4000 | Socket.IO telemetry and voice signalling |
+| Simulator | `apps/simulator` | — | Three-drone sector/telemetry simulation |
+| AI service | `apps/ai-service` | 8001 | YOLO detection, tracking and geolocation |
+| PostgreSQL/PostGIS | `database` | 5432 | Spatial incident data |
+| TURN relay | `coturn` | 3478 TCP/UDP | WebRTC relay for restrictive networks |
 
-```bash
+## Quick start — full demo
+
+Prerequisites: Docker Desktop with Compose enabled.
+
+```powershell
+docker compose up --build
+```
+
+Then open [http://localhost:3001](http://localhost:3001). The Docker build sets the dashboard data source to `live`, so it connects to the API and realtime gateway. Use `Ctrl+C` to stop the foreground stack, or add `-d` to run it in the background.
+
+Useful commands:
+
+```powershell
+# Check service status and logs
+docker compose ps
+docker compose logs -f dashboard api realtime ai-service
+
+# Re-run the idempotent demo seed data
+docker compose run --rm seed
+
+# Stop containers (keeps database data)
+docker compose down
+```
+
+## Local development
+
+Install the Node workspaces for dashboard, realtime gateway, and simulator:
+
+```powershell
 npm install --workspaces --include-workspace-root
-```
-
-## Run the independent demo (no other services required)
-
-Terminal 1 — gateway:
-```bash
 npm run dev:realtime
-# -> gateway listening on :4000
-```
-
-Terminal 2 — simulator:
-```bash
 npm run dev:simulator
-# -> connects, gets mission.started (mocked), streams 3 drones at 1Hz
+npm run dev:dashboard
 ```
 
-Terminal 3 — watch it live with a raw client, or:
-```bash
-curl http://localhost:4000/realtime/health
+Run the AI service separately:
+
+```powershell
+cd apps/ai-service
+python -m pip install -r requirements.txt
+uvicorn src.detection.app:app --app-dir src/detection --port 8001
 ```
 
-## Regenerate fixtures
+The dashboard uses fixture data by default in local development. Set `NEXT_PUBLIC_DATA_SOURCE=live`, `NEXT_PUBLIC_API_URL`, and `NEXT_PUBLIC_REALTIME_URL` before starting it to use live services.
 
-```bash
-npm run fixtures
-# writes apps/simulator/sample_telemetry.json, ground_truth.json, sample_frames/
+## Validation
+
+```powershell
+# AI detector, tracking, and geolocation tests
+python -m unittest discover -s apps/ai-service/tests -v
+
+# Node workspace tests and production build
+npm run test --workspaces
+npm run build --workspaces
+
+# Validate the full Compose configuration
+docker compose config --quiet
 ```
 
-## Tests
+Detection metrics from the held-out VisDrone validation split are in [`apps/ai-service/validation_results.json`](apps/ai-service/validation_results.json). They are prototype evaluation results, not a claim of field-ready accuracy.
 
-```bash
-cd apps/realtime && npm test
-```
-11/11 passing: schema validation (accepts valid packets, rejects missing
-fields, out-of-range values, unknown fields, malformed IDs) and the drone
-state machine (connected → lost → reconnected transitions, multi-drone
-isolation).
+## Current MVP boundaries
 
-## Definition of Done — status
+- RGB detection is implemented; thermal/RGB fusion is a future enhancement.
+- The repository demonstrates simulated drones. Physical flight control, geofencing, hardware telemetry, battery testing, and regulatory approval require authorised real-world testing.
+- TURN configuration is included, but voice reliability and latency must be tested on two devices and a restrictive network such as guest Wi-Fi or a phone hotspot.
+- The system supports responders; human confirmation remains required for rescue priority and safety-critical decisions.
 
-- [x] Telemetry contract frozen and documented in `packages/contracts/`
-- [x] Realtime gateway skeleton running, broadcasting `drone.telemetry` / `drone.status`
-- [x] Simulator produces 2–3 concurrent drones on the frozen schema
-- [x] `sample_telemetry.json` + `sample_frames/` delivered — Faiqua and Atul can start now
-- [x] Offline/lost detection state machine, unit-tested
-- [x] Independent demo verified: gateway + simulator alone, raw client sees live broadcasts, zero backend-core/AI/dashboard running
-- [ ] Consume real `mission.started` from Charan (Week 2 — currently mocked per Section 23)
-- [ ] `network.offline` → local edge buffer → `sync.completed` full replay (Week 3 scope)
-- [ ] 2nd/3rd drone hardening pass (Week 3)
+## Repository guide
 
-## Notes for downstream owners
+- `apps/ai-service` — detection, tracking, geolocation, and model evaluation
+- `apps/api` — NestJS backend and incident intelligence
+- `apps/dashboard` — Next.js command dashboard
+- `apps/realtime` — Socket.IO gateway and telemetry validation
+- `apps/simulator` — sector-based multi-drone simulator and fixtures
+- `database` — PostGIS migrations and seed script
+- `packages/contracts` — frozen telemetry contract
+- `docs` — API, architecture, and model documentation
 
-- **Faiqua / Atul:** `apps/simulator/sample_telemetry.json` and `sample_frames/`
-  are your Week 1 fixtures — don't wait on the live simulator. `ground_truth.json`
-  has the known coordinates Atul's geolocation error should be scored against.
-- **Ayush:** subscribe to `drone.telemetry` / `drone.status` on the `/realtime`
-  namespace once you're ready to swap off `mockApi/`; payload shapes are frozen
-  in `packages/contracts/README.md`.
-- **Any change to `telemetry.schema.json`** needs my sign-off + Atul's — see
-  Section 16 of the plan.
+This README reflects the SIH PRD goals while clearly separating the simulated MVP from work that requires hardware and authorised field testing.

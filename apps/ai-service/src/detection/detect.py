@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from detector import CandidateDetector
+from detector import CandidateDetector, DEFAULT_WEIGHTS, YoloDetector
 
 
 def main() -> int:
@@ -19,10 +19,22 @@ def main() -> int:
     parser.add_argument("--sector-id", default="SECTOR-A")
     parser.add_argument("--timestamp", default="2026-08-27T10:30:00Z")
     parser.add_argument("--output", type=Path, help="write JSON to this path instead of stdout")
+    parser.add_argument(
+        "--detector", choices=["auto", "color", "yolo"], default="auto",
+        help="auto uses trained YOLO weights when available; color forces the fixture fallback",
+    )
     args = parser.parse_args()
 
     images = [args.image] if args.image else sorted(p for p in args.directory.iterdir() if p.suffix.lower() in {".jpg", ".jpeg", ".png"})
-    detector = CandidateDetector()
+    if args.detector == "color":
+        detector = CandidateDetector()
+    elif args.detector == "yolo":
+        detector = YoloDetector()
+    elif DEFAULT_WEIGHTS.is_file():
+        detector = YoloDetector()
+    else:
+        detector = CandidateDetector()
+    print(f"detector: {type(detector).__name__}", file=sys.stderr)
     detections = []
     try:
         for image in images:

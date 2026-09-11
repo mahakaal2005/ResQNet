@@ -92,8 +92,10 @@ services:
 
   turn:
     image: coturn/coturn:4.6
-    network_mode: host
     command: ["-n", "--log-file=stdout", "--listening-port=3478", "--realm=resqnet.demo", "--user=resqnet:resqnet-turn"]
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
 
   realtime:
     build:
@@ -128,6 +130,8 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
         NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-http://localhost:4000}
+        NEXT_PUBLIC_TURN_HOST: ${NEXT_PUBLIC_TURN_HOST:-localhost}
+        NEXT_PUBLIC_DATA_SOURCE: ${NEXT_PUBLIC_DATA_SOURCE:-live}
     depends_on:
       api:
         condition: service_healthy
@@ -136,8 +140,19 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
       NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL:-http://localhost:4000}
+      NEXT_PUBLIC_TURN_HOST: ${NEXT_PUBLIC_TURN_HOST:-localhost}
+      NEXT_PUBLIC_DATA_SOURCE: ${NEXT_PUBLIC_DATA_SOURCE:-live}
     ports:
       - "${DASHBOARD_PORT:-3001}:3000"
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: apps/ai-service/Dockerfile
+    ports:
+      - "${AI_SERVICE_PORT:-8001}:8001"
+    environment:
+      RESQNET_DETECTOR: ${RESQNET_DETECTOR:-auto}
 
 volumes:
   db_data:

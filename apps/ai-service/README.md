@@ -26,7 +26,8 @@ To feed a running API from fixtures:
 python src/pipeline.py --telemetry ../simulator/sample_telemetry.json --frames ../simulator/sample_frames --api-url http://localhost:3000
 ```
 
-The checked-in detector is a deterministic high-visibility fixture detector,
-not a trained YOLO model. It is appropriate for repeatable Phase-1 synthetic
-demo frames; a production YOLO weight file and labelled evaluation set are
-still required before claiming field precision/recall.
+By default, the service loads the checked-in fine-tuned YOLO weights at
+`models/resqnet-person-v1.pt`; set `RESQNET_DETECTOR=color` to force the
+deterministic high-visibility fallback used by synthetic fixture tests. The
+CLI has the equivalent `--detector auto|yolo|color` option. Evaluation results
+for the held-out VisDrone split are recorded in `validation_results.json`.
