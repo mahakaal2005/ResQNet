@@ -78,6 +78,23 @@ class CandidateDetector:
 DEFAULT_WEIGHTS = Path(__file__).parents[2] / "models" / "resqnet-person-v1.pt"
 
 
+def yolo_runtime_error() -> str | None:
+    """Return a human-readable error if this Python environment cannot run YOLO.
+
+    Ultralytics imports torchvision lazily during its first inference.  Checking
+    it here lets an ``auto`` run choose the documented fixture detector before
+    processing a mission, instead of crashing on its first frame when local
+    torch and torchvision wheels do not match.
+    """
+    try:
+        import torch  # noqa: F401
+        import torchvision  # noqa: F401
+        from ultralytics import YOLO  # noqa: F401
+    except Exception as error:  # Import failures vary by OS/wheel build.
+        return f"YOLO runtime unavailable: {type(error).__name__}: {error}"
+    return None
+
+
 class YoloDetector:
     """Real inference using a fine-tuned YOLOv8 person detector.
 
@@ -94,12 +111,14 @@ class YoloDetector:
                 f"no trained weights at {self.weights_path} — run src/training/train.py first, "
                 "or pass an explicit weights_path"
             )
-        try:
-            from ultralytics import YOLO
-        except ImportError as error:
-            raise ImportError(
-                "install the optional training/inference dependency first: pip install ultralytics"
-            ) from error
+        runtime_error = yolo_runtime_error()
+        if runtime_error:
+            raise RuntimeError(
+                f"{runtime_error}. Install matching CPU wheels, for example: "
+                "pip install --force-reinstall --index-url https://download.pytorch.org/whl/cpu "
+                "torch==2.5.1+cpu torchvision==0.20.1+cpu"
+            )
+        from ultralytics import YOLO
         self._model = YOLO(str(self.weights_path))
 
     def detect(self, image_path: Path, *, drone_id: str, sector_id: str, timestamp: str) -> list[Detection]:

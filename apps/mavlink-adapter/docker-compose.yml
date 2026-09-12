@@ -1,0 +1,25 @@
+services:
+  mavlink-adapter-1:
+    build:
+      context: ../..
+      dockerfile: apps/mavlink-adapter/Dockerfile
+    command: ["python", "apps/mavlink-adapter/main.py", "apps/mavlink-adapter/config/drone-01.json"]
+    network_mode: host
+  mavlink-adapter-2:
+    build:
+      context: ../..
+      dockerfile: apps/mavlink-adapter/Dockerfile
+    command: ["python", "apps/mavlink-adapter/main.py", "apps/mavlink-adapter/config/drone-02.json"]
+    network_mode: host
+  mavlink-adapter-3:
+    build:
+      context: ../..
+      dockerfile: apps/mavlink-adapter/Dockerfile
+    command: ["python", "apps/mavlink-adapter/main.py", "apps/mavlink-adapter/config/drone-03.json"]
+    network_mode: host
+  mavlink-adapter-4:
+    build:
+      context: ../..
+      dockerfile: apps/mavlink-adapter/Dockerfile
+    command: ["python", "apps/mavlink-adapter/main.py", "apps/mavlink-adapter/config/drone-04.json"]
+    network_mode: host

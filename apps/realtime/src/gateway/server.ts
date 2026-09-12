@@ -14,6 +14,18 @@ interface TelemetryPacket {
   timestamp: string;
 }
 interface TelemetryReplay { drone_id: string; records: unknown[]; }
+interface DetectionEvent {
+  detection_id: string;
+  drone_id: string;
+  sector_id: string;
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+  confidence: number;
+  bbox: { x: number; y: number; w: number; h: number };
+  frame_ref?: string;
+  status?: "new" | "confirmed" | "rescued" | "false_positive";
+}
 
 export interface GatewayOptions {
   port?: number;
@@ -32,6 +44,11 @@ export function createGateway(opts: GatewayOptions = {}) {
   const droneSockets = new Map<string, string>();
   const socketDrones = new Map<string, Set<string>>();
   const lastTelemetryMs = new Map<string, number>();
+  // The gateway is deliberately the short-lived operational cache. It lets a
+  // newly opened dashboard render the last known positions without inventing
+  // client-side coordinates; the database remains the incident system of record.
+  const latestTelemetry = new Map<string, unknown>();
+  const latestDetections = new Map<string, DetectionEvent>();
   let missionStartScheduled = false;
   let missionTimer: NodeJS.Timeout | undefined;
 
@@ -46,6 +63,11 @@ export function createGateway(opts: GatewayOptions = {}) {
         mission_id: "MISSION-DEMO-1", status: event === "mission.started" ? "active" : "paused",
       }));
     }
+    socket.emit("drone.sync", {
+      drones: [...latestTelemetry.values()],
+      detections: [...latestDetections.values()],
+      at: new Date().toISOString(),
+    });
 
     socket.on("drone.register", (registration: unknown) => {
       if (!isDroneRegistration(registration)) return void socket.emit("drone.registration.rejected", { reason: "invalid_registration" });
@@ -61,6 +83,14 @@ export function createGateway(opts: GatewayOptions = {}) {
 
     socket.on("telemetry", (packet: unknown) => {
       ingestTelemetry(packet, socket.id);
+    });
+
+    socket.on("detection.created", (event: unknown) => {
+      if (!isDetectionEvent(event) || !socketDrones.get(socket.id)?.has(event.drone_id)) {
+        return void socket.emit("detection.rejected", { reason: "invalid_detection" });
+      }
+      latestDetections.set(event.detection_id, event);
+      realtime.emit("detection.created", event);
     });
 
     socket.on("telemetry.replay", (replay: unknown) => {
@@ -170,6 +200,7 @@ export function createGateway(opts: GatewayOptions = {}) {
       return false;
     }
     lastTelemetryMs.set(p.drone_id, timestampMs);
+    latestTelemetry.set(p.drone_id, packet);
     const nowMs = Date.now();
     const previousState = stateMachine.get(p.drone_id);
     const statusEvent = stateMachine.onTelemetry(p.drone_id, p.sector_id, nowMs);
@@ -186,6 +217,18 @@ export function createGateway(opts: GatewayOptions = {}) {
     }
     return true;
   }
+}
+
+function isDetectionEvent(value: unknown): value is DetectionEvent {
+  if (!isObject(value)) return false;
+  const bbox = value.bbox;
+  return typeof value.detection_id === "string" && value.detection_id.length > 0
+    && typeof value.drone_id === "string" && typeof value.sector_id === "string"
+    && typeof value.timestamp === "string" && !Number.isNaN(Date.parse(value.timestamp))
+    && typeof value.latitude === "number" && Number.isFinite(value.latitude)
+    && typeof value.longitude === "number" && Number.isFinite(value.longitude)
+    && typeof value.confidence === "number" && value.confidence >= 0 && value.confidence <= 1
+    && isObject(bbox) && [bbox.x, bbox.y, bbox.w, bbox.h].every(n => typeof n === "number" && Number.isFinite(n));
 }
 
 function isDroneRegistration(value: unknown): value is DroneRegistration {

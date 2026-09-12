@@ -66,6 +66,24 @@
       "type": "string",
       "description": "Reference/pointer to the frame captured at this tick (filename or storage key), NOT inline binary. Renamed from PRD's 'frame' to make explicit this is a pointer only, keeping the socket payload small.",
       "examples": ["frame_00234.jpg"]
+    },
+    "battery_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Remaining battery percentage reported by the flight controller."
+    },
+    "armed": {
+      "type": "boolean",
+      "description": "Current armed state reported by the flight controller."
+    },
+    "flight_mode": {
+      "type": "string",
+      "description": "Current flight mode reported by the flight controller."
+    },
+    "gps_healthy": {
+      "type": "boolean",
+      "description": "Whether the flight controller reports a usable GPS fix."
     }
   }
 }

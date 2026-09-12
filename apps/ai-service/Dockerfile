@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir --timeout 600 --retries 5 \
 RUN pip install --no-cache-dir --timeout 600 --retries 5 -r requirements.txt
 
 COPY apps/ai-service/ ./
-
+COPY packages/contracts/ /packages/contracts/
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8001
 

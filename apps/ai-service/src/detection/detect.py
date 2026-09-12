@@ -31,7 +31,11 @@ def main() -> int:
     elif args.detector == "yolo":
         detector = YoloDetector()
     elif DEFAULT_WEIGHTS.is_file():
-        detector = YoloDetector()
+        try:
+            detector = YoloDetector()
+        except RuntimeError as error:
+            print(f"detector: CandidateDetector (auto fallback; {error})", file=sys.stderr)
+            detector = CandidateDetector()
     else:
         detector = CandidateDetector()
     print(f"detector: {type(detector).__name__}", file=sys.stderr)

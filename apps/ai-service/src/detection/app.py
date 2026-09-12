@@ -33,8 +33,13 @@ def _select_detector() -> CandidateDetector | YoloDetector:
         logger.info("detector: YoloDetector (forced by RESQNET_DETECTOR=yolo)")
         return YoloDetector()
     if DEFAULT_WEIGHTS.is_file():
-        logger.info("detector: YoloDetector (auto-selected, trained weights found at %s)", DEFAULT_WEIGHTS)
-        return YoloDetector()
+        try:
+            detector = YoloDetector()
+            logger.info("detector: YoloDetector (auto-selected, trained weights found at %s)", DEFAULT_WEIGHTS)
+            return detector
+        except RuntimeError as error:
+            logger.warning("detector: CandidateDetector (auto fallback because %s)", error)
+            return CandidateDetector()
     logger.info("detector: CandidateDetector (auto-selected, no trained weights at %s)", DEFAULT_WEIGHTS)
     return CandidateDetector()
 

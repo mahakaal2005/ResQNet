@@ -27,8 +27,13 @@ def build_detector(mode: str):
         print("detector: YoloDetector (forced)", file=sys.stderr)
         return YoloDetector()
     if DEFAULT_WEIGHTS.is_file():
-        print(f"detector: YoloDetector (auto-selected, weights at {DEFAULT_WEIGHTS})", file=sys.stderr)
-        return YoloDetector()
+        try:
+            detector = YoloDetector()
+            print(f"detector: YoloDetector (auto-selected, weights at {DEFAULT_WEIGHTS})", file=sys.stderr)
+            return detector
+        except RuntimeError as error:
+            print(f"detector: CandidateDetector (auto fallback; {error})", file=sys.stderr)
+            return CandidateDetector()
     print(f"detector: CandidateDetector (auto-selected, no weights at {DEFAULT_WEIGHTS})", file=sys.stderr)
     return CandidateDetector()
 

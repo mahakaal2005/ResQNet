@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "detection"))
-from detector import CandidateDetector, DEFAULT_WEIGHTS, YoloDetector
+from detector import CandidateDetector, DEFAULT_WEIGHTS, YoloDetector, yolo_runtime_error
 
 
 class CandidateDetectorTests(unittest.TestCase):
@@ -36,7 +36,7 @@ class YoloDetectorTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             YoloDetector(weights_path=Path("/nonexistent/weights.pt"))
 
-    @unittest.skipUnless(DEFAULT_WEIGHTS.is_file(), "trained weights not present; run src/training/train.py first")
+    @unittest.skipUnless(DEFAULT_WEIGHTS.is_file() and yolo_runtime_error() is None, "trained weights or a compatible YOLO runtime not present")
     def test_returns_frozen_contract_shape_with_real_weights(self) -> None:
         frame = Path(__file__).parents[2] / "simulator" / "sample_frames" / "frame_00001.jpg"
         detector = YoloDetector()

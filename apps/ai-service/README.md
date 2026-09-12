@@ -31,3 +31,17 @@ By default, the service loads the checked-in fine-tuned YOLO weights at
 deterministic high-visibility fallback used by synthetic fixture tests. The
 CLI has the equivalent `--detector auto|yolo|color` option. Evaluation results
 for the held-out VisDrone split are recorded in `validation_results.json`.
+
+## Windows PyTorch note
+
+The checked-in Docker image pins the compatible CPU pair `torch 2.5.1` and
+`torchvision 0.20.1`. If local inference reports
+`operator torchvision::nms does not exist`, the installed wheels are mismatched.
+`--detector auto` now logs this and uses the deterministic fixture detector;
+`--detector yolo` still fails deliberately. To restore real local YOLO
+inference, reinstall the matched pair in the same Python environment:
+
+```powershell
+python -m pip install --force-reinstall --index-url https://download.pytorch.org/whl/cpu torch==2.5.1+cpu torchvision==0.20.1+cpu
+python -m pip install -r requirements.txt
+```

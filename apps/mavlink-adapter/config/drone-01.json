@@ -1,0 +1,7 @@
+{
+  "drone_id": "DRONE-01", "sector_id": "SECTOR-A", "mavlink_port": 14540,
+  "gateway_url": "http://localhost:4000/realtime", "takeoff_altitude_m": 20,
+  "waypoints": [
+    {"lat": 47.3980, "lon": 8.5450, "alt_m": 20}, {"lat": 47.3985, "lon": 8.5460, "alt_m": 20}, {"lat": 47.3990, "lon": 8.5445, "alt_m": 20}
+  ]
+}

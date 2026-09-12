@@ -1,0 +1,5 @@
+mavsdk
+python-socketio[asyncio_client]
+jsonschema
+pytest
+pytest-asyncio
